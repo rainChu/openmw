@@ -52,6 +52,11 @@ namespace Compiler
         void registerExtensions (Extensions& extensions);
     }
 
+    namespace Network
+    {
+        void registerExtensions (Extensions& extensions);
+    }
+
     namespace Sky
     {
         void registerExtensions (Extensions& extensions);

@@ -21,6 +21,8 @@ namespace MWWorld
         };
 
         void reportCharacterMovement( const CharacterMovementPacket &packet);
+
+        bool connect(const std::string &address, const std::string &slotPassword);
     };
 }
 

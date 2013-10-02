@@ -15,6 +15,7 @@ namespace Compiler
         Dialogue::registerExtensions (extensions);
         Gui::registerExtensions (extensions);
         Misc::registerExtensions (extensions);
+        Network::registerExtensions(extensions);
         Sky::registerExtensions (extensions);
         Sound::registerExtensions (extensions);
         Stats::registerExtensions (extensions);
@@ -260,6 +261,21 @@ namespace Compiler
             extensions.registerInstruction ("sv", "", opcodeShowVars, opcodeShowVarsExplicit);
             extensions.registerInstruction("tgm", "", opcodeToggleGodMode);
             extensions.registerInstruction("togglegodmode", "", opcodeToggleGodMode);
+        }
+    }
+
+    namespace Network
+    {
+        void registerExtensions (Extensions& extensions)
+        {
+            extensions.registerInstruction ("networkconnect", "SS", opcodeNetworkConnect);
+            extensions.registerInstruction ("networkdisconnect", "", opcodeNetworkDisconnect);
+
+            extensions.registerInstruction ("networkopen", "", opcodeNetworkOpen);
+            extensions.registerInstruction ("networkclose", "", opcodeNetworkClose);
+            extensions.registerInstruction ("networkkick", "S", opcodeNetworkKick);
+
+            extensions.registerInstruction ("aipuppet", "lc", opcodeAiPuppet);
         }
     }
 

@@ -7,6 +7,7 @@
 #include "soundextensions.hpp"
 #include "cellextensions.hpp"
 #include "miscextensions.hpp"
+#include "networkextensions.hpp"
 #include "guiextensions.hpp"
 #include "skyextensions.hpp"
 #include "statsextensions.hpp"
@@ -26,6 +27,7 @@ namespace MWScript
         Interpreter::installOpcodes (interpreter);
         Cell::installOpcodes (interpreter);
         Misc::installOpcodes (interpreter);
+        Network::installOpcodes (interpreter);
         Gui::installOpcodes (interpreter);
         Sound::installOpcodes (interpreter);
         Sky::installOpcodes (interpreter);
