@@ -36,6 +36,7 @@
 #include "../mwworld/player.hpp"
 #include "../mwworld/class.hpp"
 #include "../mwworld/inventorystore.hpp"
+#include "../mwworld/network.hpp"
 
 namespace
 {
@@ -876,6 +877,19 @@ void CharacterController::update(float duration)
 
         world->queueMovement(mPtr, vec);
         movement = vec;
+
+        MWWorld::Network::CharacterMovementPacket packet;
+
+        //packet.mCharacter = mPtr.getCellRef().mRefID;//mPtr.getRefData().getHandle();
+        packet.mRefNum = mPtr.getCellRef().mRefnum;
+        packet.mAngle = rot;
+        packet.mVelocity = vec;
+        const ESM::Position &refpos = mPtr.getRefData().getPosition();
+        packet.mCurrentPosition.x = refpos.pos[0];
+        packet.mCurrentPosition.y = refpos.pos[1];
+        packet.mCurrentPosition.z = refpos.pos[2];
+
+        world->getNetwork().reportCharacterMovement(packet);
     }
     else if(cls.getCreatureStats(mPtr).isDead())
     {
