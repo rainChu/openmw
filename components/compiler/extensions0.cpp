@@ -271,7 +271,7 @@ namespace Compiler
             extensions.registerInstruction ("networkconnect", "SS", opcodeNetworkConnect);
             extensions.registerInstruction ("networkdisconnect", "", opcodeNetworkDisconnect);
 
-            extensions.registerInstruction ("networkopen", "", opcodeNetworkOpen);
+            extensions.registerInstruction ("networkopen", "lS", opcodeNetworkOpen);
             extensions.registerInstruction ("networkclose", "", opcodeNetworkClose);
             extensions.registerInstruction ("networkkick", "S", opcodeNetworkKick);
 
