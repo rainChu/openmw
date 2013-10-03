@@ -878,18 +878,19 @@ void CharacterController::update(float duration)
         world->queueMovement(mPtr, vec);
         movement = vec;
 
-        MWWorld::Network::CharacterMovementPacket packet;
+        MWWorld::Network::CharacterMovementPayload payload;
 
         //packet.mCharacter = mPtr.getCellRef().mRefID;//mPtr.getRefData().getHandle();
-        packet.mRefNum = mPtr.getCellRef().mRefnum;
-        packet.mAngle = rot;
-        packet.mVelocity = vec;
+        payload.mRefNum = mPtr.getCellRef().mRefnum;
         const ESM::Position &refpos = mPtr.getRefData().getPosition();
-        packet.mCurrentPosition.x = refpos.pos[0];
-        packet.mCurrentPosition.y = refpos.pos[1];
-        packet.mCurrentPosition.z = refpos.pos[2];
+        for (size_t i = 0; i < 3; ++i)
+        {
+            payload.mAngle[i]           = rot[i];
+            payload.mVelocity[i]        = vec[i];
+            payload.mCurrentPosition[i] = refpos.pos[i];
+        }
 
-        world->getNetwork().reportCharacterMovement(packet);
+        world->getNetwork().reportCharacterMovement(payload);
     }
     else if(cls.getCreatureStats(mPtr).isDead())
     {

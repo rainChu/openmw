@@ -17,7 +17,7 @@ namespace MWScript
 {
     namespace Network
     {
-        class OpNetworkConnect : public Interpreter::Opcode0
+        class OpNetworkJoin : public Interpreter::Opcode0
         {
         public:
 
@@ -31,11 +31,11 @@ namespace MWScript
 
                 runtime.getContext().report("Connecting to <" + address + "> ...");
                 MWBase::Environment::get().getWorld()->getNetwork().connect(address, password);
-                runtime.getContext().report("...Not implemented!");
+                runtime.getContext().report("Connected.");
             }
         };
 
-        class OpNetworkOpen : public Interpreter::Opcode0
+        class OpNetworkCreate : public Interpreter::Opcode0
         {
         public:
 
@@ -43,7 +43,7 @@ namespace MWScript
             {
                 using boost::lexical_cast;
 
-                int port = runtime.getIntegerLiteral(runtime[0].mInteger);
+                int port = runtime[0].mInteger;
                 runtime.pop();
 
                 std::string protocol = runtime.getStringLiteral(runtime[0].mInteger);
@@ -61,7 +61,7 @@ namespace MWScript
 
             virtual void execute (Interpreter::Runtime& runtime)
             {
-                MWBase::Environment::get().getWorld()->getNetwork().closeServer();
+                MWBase::Environment::get().getWorld()->getNetwork().close();
                 runtime.getContext().report("Server Closed");
             }
         };
@@ -69,8 +69,8 @@ namespace MWScript
 
         void installOpcodes(Interpreter::Interpreter &interpreter)
         {
-            interpreter.installSegment5(Compiler::Network::opcodeNetworkConnect, new OpNetworkConnect);
-            interpreter.installSegment5(Compiler::Network::opcodeNetworkOpen, new OpNetworkOpen);
+            interpreter.installSegment5(Compiler::Network::opcodeNetworkJoin, new OpNetworkJoin);
+            interpreter.installSegment5(Compiler::Network::opcodeNetworkCreate, new OpNetworkCreate);
             interpreter.installSegment5(Compiler::Network::opcodeNetworkClose, new OpNetworkClose);
         }
     }

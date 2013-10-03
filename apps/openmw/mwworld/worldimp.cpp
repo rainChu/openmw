@@ -1263,6 +1263,8 @@ namespace MWWorld
                 mRendering->playVideo(mFallback.getFallbackString("Movies_New_Game"), true);
         }
 
+        mNetwork->update();
+
         mWeatherManager->update (duration);
 
         mWorldScene->update (duration, paused);

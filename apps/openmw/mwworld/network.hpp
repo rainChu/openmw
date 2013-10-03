@@ -24,31 +24,40 @@ namespace MWWorld
         Network();
         ~Network();
 
+        void update();
+
+        struct CharacterMovementPayload
+        {
+            int mRefNum;
+            MWMechanics::CharacterState mMovementState;
+
+            // Can't use Ogre::Vector3 in a union
+            float mVelocity[3];
+            float mCurrentPosition[3];
+            float mAngle[3];
+        };
+
         struct Packet
         {
             enum Type
             {
-                CharacterMovement
+                CharacterMovement,
+                NewClient
             };
             Type type;
 
             union
             {
+                CharacterMovementPayload characterMovement;
+                
                 struct
                 {
-                    int mRefNum;
-                    MWMechanics::CharacterState mMovementState;
-                    Ogre::Vector3 mVelocity;
-                    Ogre::Vector3 mCurrentPosition;
-                    Ogre::Vector3 mAngle;
-                } characterMovement;
-
-                int dummy; // TODO remove me when there's another type
+                    char mPassword[32];
+                } newClient;
             } payload;
         };
 
-
-        void reportCharacterMovement( const CharacterMovementPacket &packet);
+        void reportCharacterMovement( const CharacterMovementPayload &payload);
 
         /// \brief Connects to a remote server.
         /// \param address a human-friendly address such as "localhost:1337" or "192.168.0.103:1337"
@@ -61,34 +70,17 @@ namespace MWWorld
         /// \param The protocol, either TCP or UDP.
         /// \exception std::exception If unable to open, an exception will be thrown with a user-friendly reason.
         void openServer(int port, const std::string &protocol);
-        void closeServer();
+
+        void close();
 
     private:
 
-        boost::asio::io_service mIoService;
+        class Service;
+        class UdpServer;
+        class UdpClient;
 
-        class Server{};
-
-        class UdpServer :
-            public Server
-        {
-        public:
-            UdpServer(boost::asio::io_service &ioService, int port);
-
-            void onReceive( const boost::system::error_code &e,
-                            size_t bytesTransferred,
-                            boost::shared_ptr<boost::asio::ip::udp::endpoint> remote);
-        private:
-            boost::asio::ip::udp::socket mSocket;
-
-            // using a boost array allows the size to be known,
-            // so there's never a buffer overrun.
-            boost::array<char, sizeof Packet> mBuffer;
-
-            void listenForOne();
-        };
-
-        Server *mServer;
+        bool     mIsServer;
+        Service *mService;
     };
 }
 

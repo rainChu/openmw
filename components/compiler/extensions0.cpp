@@ -268,11 +268,10 @@ namespace Compiler
     {
         void registerExtensions (Extensions& extensions)
         {
-            extensions.registerInstruction ("networkconnect", "SS", opcodeNetworkConnect);
-            extensions.registerInstruction ("networkdisconnect", "", opcodeNetworkDisconnect);
-
-            extensions.registerInstruction ("networkopen", "lS", opcodeNetworkOpen);
+            extensions.registerInstruction ("networkjoin", "SS", opcodeNetworkJoin);
+            extensions.registerInstruction ("networkcreate", "lS", opcodeNetworkCreate);
             extensions.registerInstruction ("networkclose", "", opcodeNetworkClose);
+
             extensions.registerInstruction ("networkkick", "S", opcodeNetworkKick);
 
             extensions.registerInstruction ("aipuppet", "lc", opcodeAiPuppet);

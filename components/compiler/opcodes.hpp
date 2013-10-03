@@ -229,18 +229,17 @@ namespace Compiler
         // I don't know if these are safe, if an opcode conflicts later,
         // change this one here.
 
+        const int opcodeNetworkClose = 0x2000330;
         // Client
-        const int opcodeNetworkConnect = 0x2000330;
-        const int opcodeNetworkDisconnect = 0x2000331;
+        const int opcodeNetworkJoin = 0x2000331;
         // Server
-        const int opcodeNetworkOpen = 0x2000332;
-        const int opcodeNetworkClose = 0x2000333;
-        const int opcodeNetworkKick = 0x2000334;
+        const int opcodeNetworkCreate = 0x2000332;
+        const int opcodeNetworkKick = 0x2000333;
 
         // This one looks like an Ai Package, but really
         // it's part of the Network extension.
-        const int opcodeAiPuppet = 0x2000335;
-        const int opcodeAiPuppetExplicit = 0x2000336;
+        const int opcodeAiPuppet = 0x2000334;
+        const int opcodeAiPuppetExplicit = 0x2000335;
     }
 
     namespace Sky
