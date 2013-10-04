@@ -274,7 +274,7 @@ namespace Compiler
 
             extensions.registerInstruction ("networkkick", "S", opcodeNetworkKick);
 
-            extensions.registerInstruction ("aipuppet", "lc", opcodeAiPuppet);
+            extensions.registerInstruction ("aipuppet", "S", opcodeAiPuppet, opcodeAiPuppetExplicit);
         }
     }
 

@@ -21,7 +21,7 @@ namespace MWMechanics
             ///< \return Package completed?
             
             virtual int getTypeId() const = 0;
-            ///< 0: Wanter, 1 Travel, 2 Escort, 3 Follow, 4 Activate
+            ///< 0: Wanter, 1 Travel, 2 Escort, 3 Follow, 4 Activate, 5 Puppet
     };
 }
 

@@ -33,7 +33,7 @@ namespace MWMechanics
             virtual ~AiSequence();
 
             int getTypeId() const;
-            ///< -1: None, 0: Wanter, 1 Travel, 2 Escort, 3 Follow, 4 Activate    
+            ///< \return -1: None, 0: Wanter, 1 Travel, 2 Escort, 3 Follow, 4 Activate  5 Puppet
             
             bool isPackageDone() const;
             ///< Has a package been completed during the last update?

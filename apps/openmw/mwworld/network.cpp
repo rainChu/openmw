@@ -194,19 +194,22 @@ namespace MWWorld
         if( e == boost::asio::error::operation_aborted )
             return; // Just cleaning up
 
-        std::cout << "I got data! I got: ";
-
         Packet *packet = (Packet *)(mBuffer.c_array());
-        //memcpy( &packet, mBuffer.c_array(), sizeof Packet);
 
+        std::cout << "New client with Secret Phrase of '";
         std::cout << packet->payload.newClient.mPassword;
+        std::cout << "'." << std::endl;
 
-        strcpy( packet->payload.newClient.mPassword, "Potato");
+        // TODO verify the secret phrase properly
+        if (strcmp(packet->payload.newClient.mPassword, "chips") == 0)
+        {
+            strcpy( packet->payload.newClient.mPassword, "ACK");
 
-        mSocket->async_send_to(boost::asio::buffer(mBuffer), mClientEndpoint,
+            mSocket->async_send_to(boost::asio::buffer(mBuffer), mClientEndpoint,
             boost::bind(&UdpServer::onSend, this,
                 boost::asio::placeholders::error,
                 boost::asio::placeholders::bytes_transferred));
+        }
 
         // listen for another.
         listenForOne();
@@ -277,15 +280,18 @@ namespace MWWorld
         if( e == boost::asio::error::operation_aborted )
             return; // Just cleaning up
 
-        if (e == boost::asio::error::connection_reset)
-            return; //FIXME
+        //if (e == boost::asio::error::connection_reset)
+            //return; //FIXME
+        if (e == 0)
+        {
+            Packet *packet= (Packet *)(mBuffer.c_array());
+            if (strcmp(packet->payload.newClient.mPassword, "ACK") == 0)
+            {
+                std::cout << "The server acknowledged me. Maintaining Connection" << std::endl;
 
-        std::cout << "Accepted! I got: ";
-
-        Packet *packet= (Packet *)(mBuffer.c_array());
-        std::cout << packet->payload.newClient.mPassword;
-
-        mAccepted = true;
-        timeout->cancel();
+                mAccepted = true;
+                timeout->cancel();
+            }
+        }
     }
 }
