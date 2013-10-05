@@ -16,6 +16,12 @@ namespace MWWorld
     /// that function will throw an exception instead of simply returning
     /// false. This allows for error messages without needing a separate "errorMessage"
     /// function.
+    ///
+    /// It should be noted that though there are no usernames, a "secret phrase" is used. A
+    /// player wishing to connect specifies this as a password, and it's never revealed
+    /// to other players. His character name is what the players see. This secret username
+    /// prevents bored players from trolling their friends by connecting as someone else's
+    /// character, for fun and/or profit.
     class Network
     {
         Network( const Network &); // not implemented
@@ -26,6 +32,7 @@ namespace MWWorld
 
         void update();
 
+        /// \fixme Don't expose Packet types as public, just use them internally.
         struct CharacterMovementPayload
         {
             int mRefNum;
@@ -39,21 +46,42 @@ namespace MWWorld
 
         struct Packet
         {
+            enum MessageCode
+            {
+                /// There is no puppet on the server with the given name
+                WrongPassword
+            };
+
             enum Type
             {
                 CharacterMovement,
-                NewClient
+                NewClient,
+                AcceptClient,
+                OtherMessage
             };
             Type type;
 
             union
             {
+                /// Sent on a typical client update.
                 CharacterMovementPayload characterMovement;
                 
+                /// Sent from the client to request connection
                 struct
                 {
                     char mPassword[32];
                 } newClient;
+
+                /// Sent from the server when a new client is accepted.
+                struct
+                {
+                    bool isExterior;
+                    /// \fixme find out the actual max length of a cell name
+                    char cellName[64];
+                    ESM::Position position;
+                } acceptClient;
+
+                MessageCode messageCode;
             } payload;
         };
 
@@ -73,14 +101,29 @@ namespace MWWorld
 
         void close();
 
+        /// \brief Assigns an NPC to this network as a puppet.
+        /// The NPC should also have assigned AiPuppet package, or the
+        /// Network can't update it.
+        /// \param secretPhrase The username or secret passphrase, possibly unknown by anyone but the server and
+        ///                     the user in question, which securely associates a player to his own puppet.
+        /// \param npc The NPC which is to be remotely controlled by this Network. Note that the NPC must have
+        ///            the AIPuppet assigned to it, or it can't be controlled.
+        /// \exception std::exception If unable to create the puppet for various reasons, an exception with a user-friendly reason will be thrown.
+        void createPuppet(const std::string &secretPhrase, const Ptr &npc);
+
     private:
 
         class Service;
         class UdpServer;
         class UdpClient;
 
+        friend class UdpServer;
+        friend class UdpClient;
+
         bool     mIsServer;
         Service *mService;
+
+        std::map<std::string, Ptr> mPuppets;
     };
 }
 

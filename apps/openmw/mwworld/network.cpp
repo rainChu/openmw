@@ -4,6 +4,12 @@
 
 #include <components/misc/stringops.hpp>
 
+#include "../mwbase/environment.hpp"
+
+#include "../mwworld/worldimp.hpp"
+#include "../mwworld/player.hpp"
+//#include "../mwworld/a"
+
 namespace MWWorld
 {
     class Network::Service
@@ -11,8 +17,9 @@ namespace MWWorld
         Service( const Service &); // Not Implemented
         void operator=( const Service &); // Not Implemented
     public:
-        Service() :
-            mIoService(new boost::asio::io_service)
+        Service(Network &network) :
+            mIoService(new boost::asio::io_service),
+            mNetwork(&network)
         {}
         virtual ~Service(){}
 
@@ -20,6 +27,7 @@ namespace MWWorld
 
     protected:
         boost::asio::io_service *mIoService;
+        Network *mNetwork;
     };
 
     class Network::UdpServer :
@@ -28,7 +36,7 @@ namespace MWWorld
         UdpServer(const UdpServer &); // not implemented
         void operator=(const UdpServer &); // not implemented
     public:
-        UdpServer(int port);
+        UdpServer(Network &network, int port);
         ~UdpServer();
 
         void onReceive( const boost::system::error_code &e,
@@ -57,7 +65,7 @@ namespace MWWorld
         /// \brief Maintains a UDP connection to a UdpServer.
         /// \param address The endpoint url packets should be addressed to.
         /// \param contactRequest A packet of NewClient type to make the first contact with.
-        UdpClient(const std::string &address, const Packet &contactRequest);
+        UdpClient(Network &network, const std::string &address, const Packet &contactRequest);
         ~UdpClient();
 
         void onReceiveAccept( const boost::system::error_code &e,
@@ -117,7 +125,7 @@ namespace MWWorld
         // Gotta copy the data myself.
         strcpy( packet.payload.newClient.mPassword, slotPassword.c_str() );
 
-        mService = new UdpClient(address, packet );
+        mService = new UdpClient(*this, address, packet );
         mIsServer = false;
     }
 
@@ -135,7 +143,7 @@ namespace MWWorld
         Misc::StringUtils::toLower(normalizedProtocol);
 
         if (protocol == "udp")
-            mService = new UdpServer(port);
+            mService = new UdpServer(*this, port);
         else if (protocol == "tcp")
             throw std::exception("TCP Servers aer not implemented yet, sorry!");
         else
@@ -153,13 +161,26 @@ namespace MWWorld
         mService = NULL;
     }
 
+    void Network::createPuppet(const std::string &secretPhrase, const Ptr &npc)
+    {
+        if (!mService)
+            throw std::exception("The network isn't open.");
+
+        std::map<std::string, Ptr>::const_iterator iter = mPuppets.find(secretPhrase);
+        if (iter != mPuppets.end())
+            throw std::exception("A user with that Secret Phrase already exists.");
+
+        mPuppets[secretPhrase] = npc;
+    }
+
     void Network::Service::update()
     {
         // TODO fire off packets here, too.
         mIoService->poll();
     }
 
-    Network::UdpServer::UdpServer(int port) :
+    Network::UdpServer::UdpServer(Network &network, int port) :
+        Service(network),
         mSocket( new boost::asio::ip::udp::socket(*mIoService, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), port)))
     {
         listenForOne();
@@ -194,22 +215,58 @@ namespace MWWorld
         if( e == boost::asio::error::operation_aborted )
             return; // Just cleaning up
 
-        Packet *packet = (Packet *)(mBuffer.c_array());
+        Packet *receivedPacket = (Packet *)(mBuffer.c_array());
 
         std::cout << "New client with Secret Phrase of '";
-        std::cout << packet->payload.newClient.mPassword;
+        std::cout << receivedPacket->payload.newClient.mPassword;
         std::cout << "'." << std::endl;
 
-        // TODO verify the secret phrase properly
-        if (strcmp(packet->payload.newClient.mPassword, "chips") == 0)
-        {
-            strcpy( packet->payload.newClient.mPassword, "ACK");
+        std::map<std::string, Ptr>::const_iterator iter = mNetwork->mPuppets.find(receivedPacket->payload.newClient.mPassword);
 
-            mSocket->async_send_to(boost::asio::buffer(mBuffer), mClientEndpoint,
+        Packet returnPacket;
+
+        // Puppet exists
+        if (iter !=  mNetwork->mPuppets.end())
+        {
+            MWWorld::Ptr puppet = iter->second;
+            returnPacket.type = Packet::AcceptClient;
+
+            MWBase::World *world = MWBase::Environment::get().getWorld();
+
+            const ESM::Cell *cell = puppet.getCell()->mCell;
+            if ( cell->isExterior() )
+                returnPacket.payload.acceptClient.isExterior = true;
+            else
+            {
+                returnPacket.payload.acceptClient.isExterior = false;
+
+                assert(world->getCurrentCellName().length() < 64);
+                strcpy(returnPacket.payload.acceptClient.cellName, world->getCurrentCellName().c_str());
+            }
+
+            ESM::Position *position = &puppet.getRefData().getPosition();
+            for (size_t i = 0; i < 3; ++i)
+            {
+                returnPacket.payload.acceptClient.position.pos[i] = position->pos[i];
+                returnPacket.payload.acceptClient.position.rot[i] = position->rot[i];
+            }
+        }
+
+        // Puppet doesn't exist
+        else
+        {
+            returnPacket.type = Packet::OtherMessage;
+            returnPacket.payload.messageCode = Packet::WrongPassword;
+        }
+
+        // Raw copy the packet
+        memcpy(mBuffer.c_array(), &returnPacket, sizeof Packet);
+
+        // Fire it off
+        mSocket->async_send_to(boost::asio::buffer(mBuffer), mClientEndpoint,
             boost::bind(&UdpServer::onSend, this,
                 boost::asio::placeholders::error,
                 boost::asio::placeholders::bytes_transferred));
-        }
 
         // listen for another.
         listenForOne();
@@ -220,8 +277,9 @@ namespace MWWorld
     {
     }
 
-    Network::UdpClient::UdpClient(const std::string &address, const Packet &contactRequest) :
-        mSocket( new boost::asio::ip::udp::socket(*mIoService)),
+    Network::UdpClient::UdpClient(Network &network, const std::string &address, const Packet &contactRequest) :
+        Service(network),
+        mSocket(new boost::asio::ip::udp::socket(*mIoService)),
         mAccepted(false)
     {
         using namespace boost::asio::ip;
@@ -277,20 +335,39 @@ namespace MWWorld
             size_t bytesTransferred,
             boost::asio::deadline_timer *timeout)
     {
-        if( e == boost::asio::error::operation_aborted )
-            return; // Just cleaning up
+        // TODO Once properly checking for different errors, this is good code.
+        //if( e == boost::asio::error::operation_aborted )
+            //return; // Just cleaning up
 
-        //if (e == boost::asio::error::connection_reset)
-            //return; //FIXME
         if (e == 0)
         {
             Packet *packet= (Packet *)(mBuffer.c_array());
-            if (strcmp(packet->payload.newClient.mPassword, "ACK") == 0)
+            switch (packet->type)
             {
+            case Packet::AcceptClient:
                 std::cout << "The server acknowledged me. Maintaining Connection" << std::endl;
 
                 mAccepted = true;
                 timeout->cancel();
+
+                if (packet->payload.acceptClient.isExterior)
+                {
+                    MWBase::World *world = MWBase::Environment::get().getWorld();
+                    world->changeToExteriorCell(packet->payload.acceptClient.position);
+                }
+                else
+                {
+                    // If the cell name somehow got corrupted undetected, ending the string
+                    // ensures that there won't be a buffer overrun.
+                    /// \fixme Is this needed or not? Can someone with experience look into it?
+                    packet->payload.acceptClient.cellName[63] = '\0';
+
+                    MWBase::World *world = MWBase::Environment::get().getWorld();
+                    world->changeToInteriorCell(packet->payload.acceptClient.cellName,
+                                                packet->payload.acceptClient.position);
+                }
+            default:
+                break;
             }
         }
     }

@@ -83,29 +83,16 @@ namespace MWScript
                     std::string secretPhrase = runtime.getStringLiteral (runtime[0].mInteger);
                     runtime.pop();
 
-                    //
-                    //Interpreter::Type_Float duration = runtime[0].mFloat;
-                    //runtime.pop();
-                    //
-                    //Interpreter::Type_Float x = runtime[0].mFloat;
-                    //runtime.pop();
-                    //
-                    //Interpreter::Type_Float y = runtime[0].mFloat;
-                    //runtime.pop();
-                    //
-                    //Interpreter::Type_Float z = runtime[0].mFloat;
-                    //runtime.pop();
+                    MWBase::World *world = MWBase::Environment::get().getWorld();
 
-                    // discard additional arguments (reset), because we have no idea what they mean.
-                    //for (unsigned int i=0; i<arg0; ++i) runtime.pop();
+                    world->getNetwork().createPuppet(secretPhrase, ptr);
 
                     MWMechanics::AiPuppet aiPackage;
                     MWWorld::Class::get (ptr).getCreatureStats(ptr).getAiSequence().stack(aiPackage);
 
-                    std::cout << "AiPuppet: " << secretPhrase << std::endl;
+                    runtime.getContext().report("Created a Networked Puppet.");
                 }
         };
-
 
         void installOpcodes(Interpreter::Interpreter &interpreter)
         {
