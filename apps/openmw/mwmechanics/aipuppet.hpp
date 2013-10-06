@@ -8,14 +8,17 @@ namespace MWMechanics
 {
     class AiPuppet : public AiPackage
     {
-        public:
-            AiPuppet();
-            AiPuppet *clone() const;
+    public:
+        AiPuppet( const std::string &name);
+        AiPuppet *clone() const;
 
-            bool execute (const MWWorld::Ptr& actor);
-                    ///< \return Package completed?
+        bool execute (const MWWorld::Ptr& actor);
+                ///< \return Package completed?
 
-            int getTypeId() const;
+        int getTypeId() const;
+
+    private:
+        std::string mName;
     };
 }
 #endif

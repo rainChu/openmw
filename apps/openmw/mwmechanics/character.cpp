@@ -879,17 +879,6 @@ void CharacterController::update(float duration)
         movement = vec;
 
         MWWorld::Network::CharacterMovementPayload payload;
-
-        //payload.mRefNum = mPtr.getCellRef().mRefnum;
-        const ESM::Position &refpos = mPtr.getRefData().getPosition();
-        for (size_t i = 0; i < 3; ++i)
-        {
-            payload.mAngle[i]           = rot[i];
-            payload.mMovement[i]        = vec[i];
-            payload.mCurrentPosition[i] = refpos.pos[i];
-        }
-
-        world->getNetwork().reportCharacterMovement(payload);
     }
     else if(cls.getCreatureStats(mPtr).isDead())
     {

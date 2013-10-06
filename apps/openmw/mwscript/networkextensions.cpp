@@ -87,7 +87,7 @@ namespace MWScript
 
                     world->getNetwork().createPuppet(secretPhrase, ptr);
 
-                    MWMechanics::AiPuppet aiPackage;
+                    MWMechanics::AiPuppet aiPackage(secretPhrase);
                     MWWorld::Class::get (ptr).getCreatureStats(ptr).getAiSequence().stack(aiPackage);
 
                     runtime.getContext().report("Created a Networked Puppet.");

@@ -40,7 +40,9 @@ namespace MWWorld
 
             MWMechanics::CharacterState mMovementState;
 
-            float mMovement[3];
+            ESM::Position mMovement;
+
+            /// \todo make these into an ESM::Position
             float mCurrentPosition[3];
             float mAngle[3];
         };
@@ -61,6 +63,10 @@ namespace MWWorld
                 OtherMessage
             };
             Type type;
+
+            /// \brief The clock() of the sending computer.
+            /// Never compare these against different machines.
+            clock_t timestamp;
 
             union
             {
@@ -86,7 +92,11 @@ namespace MWWorld
             } payload;
         };
 
-        void reportCharacterMovement( const CharacterMovementPayload &payload);
+        /// \brief Gets the movement of a puppet in the network
+        /// \param puppetName[in] The name of the puppet to get.
+        /// \param out[out] The position of the puppet is returned.
+        /// \return true if the puppet existed, if false out is undefined.
+        bool getCharacterMovement(const std::string &puppetName, ESM::Position &out) const;
 
         /// \brief Connects to a remote server.
         /// \param address a human-friendly address such as "localhost:1337" or "192.168.0.103:1337"
@@ -124,7 +134,15 @@ namespace MWWorld
         bool     mIsServer;
         Service *mService;
 
-        std::map<std::string, Ptr> mPuppets;
+        struct PuppetInfo
+        {
+            Ptr            ptr;
+            clock_t        lastUpdate;
+            ESM::Position  currentMovement;
+            
+        };
+
+        std::map<std::string, PuppetInfo> mPuppets;
     };
 }
 

@@ -36,7 +36,7 @@ namespace MWWorld
         unsigned char mTicks;
         const static unsigned char sTickRate = 2;
 
-        void movePuppet(Ptr &puppet, const CharacterMovementPayload &payload) const;
+        void repositionPuppet(Ptr &puppet, const CharacterMovementPayload &payload) const;
     };
 
     class Network::UdpServer :
@@ -61,7 +61,7 @@ namespace MWWorld
         boost::asio::ip::udp::endpoint mClientEndpoint;
 
         void listenForOne();
-        void sendPacket(const Packet &packet);
+        void sendPacket(Packet &packet);
         void acknowledgeClient(Ptr puppet);
     };
 
@@ -95,7 +95,7 @@ namespace MWWorld
 
         std::string mPassword;
 
-        void sendPacket(const Packet &packet);
+        void sendPacket(Packet &packet);
         void sendPlayerMovementPacket();
     };
 
@@ -117,9 +117,21 @@ namespace MWWorld
             mService->update();
     }
 
-    void Network::reportCharacterMovement(const CharacterMovementPayload &payload)
+    bool Network::getCharacterMovement(const std::string &puppetName, ESM::Position &out) const
     {
-        //std::cout << "Moving " << packet.mRefNum << std::endl;
+        std::map<std::string, PuppetInfo>::const_iterator iter = mPuppets.find(puppetName);
+
+        if ( iter == mPuppets.end() )
+            return false;
+
+        // Asignment operator has no override in the POD struct.
+        for (size_t i = 0; i < 3; ++i)
+        {
+            out.pos[i] = iter->second.currentMovement.pos[i];
+            out.rot[i] = iter->second.currentMovement.rot[i];
+        }
+
+        return true;
     }
 
     void Network::connect(const std::string &address, const std::string &slotPassword)
@@ -182,17 +194,27 @@ namespace MWWorld
         if (!mService)
             throw std::exception("The network isn't open.");
 
-        std::map<std::string, Ptr>::const_iterator iter = mPuppets.find(secretPhrase);
+        std::map<std::string, PuppetInfo>::const_iterator iter = mPuppets.find(secretPhrase);
         if (iter != mPuppets.end())
             throw std::exception("A user with that Secret Phrase already exists.");
 
-        mPuppets[secretPhrase] = npc;
+        PuppetInfo puppetInfo;
+        puppetInfo.ptr = npc;
+        puppetInfo.lastUpdate = 0; // Should be okay on all systems I hope
+        puppetInfo.currentMovement.pos[0] =
+        puppetInfo.currentMovement.pos[1] =
+        puppetInfo.currentMovement.pos[2] = 0;
+
+        puppetInfo.currentMovement.rot[0] =
+        puppetInfo.currentMovement.rot[1] =
+        puppetInfo.currentMovement.rot[2] = 0;
+
+        mPuppets[secretPhrase] = puppetInfo;
     }
 
-    void Network::Service::movePuppet(Ptr &puppet, const CharacterMovementPayload &payload) const
+    void Network::Service::repositionPuppet(Ptr &puppet, const CharacterMovementPayload &payload) const
     {
         /// \todo deal with changing cells
-        // TODO packet.payload.characterMovement.mRefNum;
 
         ESM::Position &refpos = puppet.getRefData().getPosition();
         for (size_t i = 0; i < 3; ++i)
@@ -242,21 +264,38 @@ namespace MWWorld
             std::cout << "'." << std::endl;
 
             {
-                std::map<std::string, Ptr>::const_iterator iter = mNetwork->mPuppets.find(receivedPacket->payload.newClient.mPassword);
+                std::map<std::string, PuppetInfo>::const_iterator iter = mNetwork->mPuppets.find(receivedPacket->payload.newClient.mPassword);
 
                 // Puppet exists
                 if (iter !=  mNetwork->mPuppets.end())
-                    acknowledgeClient(iter->second);
+                    acknowledgeClient(iter->second.ptr);
             }
             break;
 
         case Packet::CharacterMovement:
             {
-                std::map<std::string, Ptr>::iterator iter = mNetwork->mPuppets.find(receivedPacket->payload.characterMovement.mPassword);
+                std::map<std::string, PuppetInfo>::iterator iter = mNetwork->mPuppets.find(receivedPacket->payload.characterMovement.mPassword);
 
                 // Puppet exists
                 if (iter !=  mNetwork->mPuppets.end())
-                    movePuppet(iter->second, receivedPacket->payload.characterMovement);
+                {
+                    if (receivedPacket->timestamp > iter->second.lastUpdate ) //The packet isn't stale
+                    {
+                        if ( memcmp(&receivedPacket->payload.characterMovement.mMovement, &iter->second.currentMovement, sizeof ESM::Position) != 0) // movement has changed
+                        {
+                            repositionPuppet(iter->second.ptr, receivedPacket->payload.characterMovement);
+
+                            iter->second.lastUpdate = receivedPacket->timestamp;
+                        }
+
+                        // Remember the movement
+                        for (size_t i = 0; i < 3; ++i)
+                        {
+                            iter->second.currentMovement.pos[i] = receivedPacket->payload.characterMovement.mMovement.pos[i];
+                            iter->second.currentMovement.rot[i] = receivedPacket->payload.characterMovement.mMovement.rot[i];
+                        }
+                    }
+                }
             }
 
         default:
@@ -279,8 +318,10 @@ namespace MWWorld
                 boost::asio::placeholders::bytes_transferred));
     }
 
-    void Network::UdpServer::sendPacket(const Packet &packet)
+    void Network::UdpServer::sendPacket(Packet &packet)
     {
+        packet.timestamp = clock();
+
         // Raw copy the packet
         memcpy(mBuffer.c_array(), &packet, sizeof Packet);
 
@@ -422,8 +463,10 @@ namespace MWWorld
         }
     }
 
-    void Network::UdpClient::sendPacket(const Packet &packet)
+    void Network::UdpClient::sendPacket(Packet &packet)
     {
+        packet.timestamp = clock();
+
         // Raw copy the packet
         memcpy(mBuffer.c_array(), &packet, sizeof Packet);
 
@@ -444,9 +487,10 @@ namespace MWWorld
         const ESM::Position &refpos = player.getRefData().getPosition();
         for (size_t i = 0; i < 3; ++i)
         {
-            packet.payload.characterMovement.mAngle[i]           = refpos.rot[i];
-            packet.payload.characterMovement.mMovement[i]        = player.getClass().getMovementSettings(player).mPosition[i];
-            packet.payload.characterMovement.mCurrentPosition[i] = refpos.pos[i];
+            packet.payload.characterMovement.mMovement.pos[i]        = player.getClass().getMovementSettings(player).mPosition[i];
+            packet.payload.characterMovement.mMovement.rot[i]        = player.getClass().getMovementSettings(player).mRotation[i];
+            packet.payload.characterMovement.mCurrentPosition[i]     = refpos.pos[i];
+            packet.payload.characterMovement.mAngle[i]               = refpos.rot[i];
         }
 
         sendPacket(packet);
