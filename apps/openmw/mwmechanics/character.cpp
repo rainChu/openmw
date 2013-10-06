@@ -880,13 +880,12 @@ void CharacterController::update(float duration)
 
         MWWorld::Network::CharacterMovementPayload payload;
 
-        //packet.mCharacter = mPtr.getCellRef().mRefID;//mPtr.getRefData().getHandle();
-        payload.mRefNum = mPtr.getCellRef().mRefnum;
+        //payload.mRefNum = mPtr.getCellRef().mRefnum;
         const ESM::Position &refpos = mPtr.getRefData().getPosition();
         for (size_t i = 0; i < 3; ++i)
         {
             payload.mAngle[i]           = rot[i];
-            payload.mVelocity[i]        = vec[i];
+            payload.mMovement[i]        = vec[i];
             payload.mCurrentPosition[i] = refpos.pos[i];
         }
 

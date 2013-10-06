@@ -35,11 +35,12 @@ namespace MWWorld
         /// \fixme Don't expose Packet types as public, just use them internally.
         struct CharacterMovementPayload
         {
-            int mRefNum;
+            /// \fixme can't we identify by endpoint instead?
+            char mPassword[32];
+
             MWMechanics::CharacterState mMovementState;
 
-            // Can't use Ogre::Vector3 in a union
-            float mVelocity[3];
+            float mMovement[3];
             float mCurrentPosition[3];
             float mAngle[3];
         };

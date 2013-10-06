@@ -16,7 +16,6 @@ namespace MWMechanics
 
     bool AiPuppet::execute (const MWWorld::Ptr& actor)
     {
-        std::cout << "Puppeting..." << std::endl;
         return false;
     }
 

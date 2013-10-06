@@ -31,6 +31,7 @@
 #include "mwworld/class.hpp"
 #include "mwworld/player.hpp"
 #include "mwworld/worldimp.hpp"
+#include "mwworld/network.hpp"
 
 #include "mwclass/classes.hpp"
 
@@ -108,6 +109,9 @@ bool OMW::Engine::frameRenderingQueued (const Ogre::FrameEvent& evt)
 
         if (changed) // keep change flag for another frame, if cell changed happend in local script
             MWBase::Environment::get().getWorld()->markCellAsUnchanged();
+
+        // update network
+        MWBase::Environment::get().getWorld()->getNetwork().update();
 
         // update actors
         MWBase::Environment::get().getMechanicsManager()->update(frametime,
