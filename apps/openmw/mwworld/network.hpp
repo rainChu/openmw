@@ -139,24 +139,25 @@ namespace MWWorld
     private:
 
         class Service;
-        class UdpServer;
-        class UdpClient;
+        class Server;
+        class Client;
 
-        friend class UdpServer;
-        friend class UdpClient;
+        friend class Server;
+        friend class Client;
 
         bool     mIsServer;
         Service *mService;
 
-        struct PuppetInfo
+        struct ClientInfo
         {
-            Ptr            ptr;
-            clock_t        lastUpdate;
-            ESM::Position  currentMovement;
+            Ptr                            ptr;
+            clock_t                        lastUpdate;
+            ESM::Position                  currentMovement;
+            boost::asio::ip::udp::endpoint endpoint;
             
         };
 
-        std::map<std::string, PuppetInfo> mPuppets;
+        std::map<std::string, ClientInfo> mClients;
     };
 }
 

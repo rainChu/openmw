@@ -26,77 +26,87 @@ namespace MWWorld
             mNetwork(&network),
             mTicks(0)
         {}
-        virtual ~Service(){}
+        virtual ~Service()
+        {
+            delete mSocket;
+            delete mIoService;
+        }
 
         virtual void update();
 
         void doNothing(){}
 
+        void onReceive( const boost::system::error_code &e,
+                size_t bytesTransferred);
+
     protected:
-        boost::asio::io_service *mIoService;
+        boost::asio::io_service      *mIoService;
+        boost::asio::ip::udp::socket *mSocket;
+
         Network *mNetwork;
 
         unsigned char mTicks;
         const static unsigned char sTickRate = 2;
 
-        void repositionPuppet(Ptr &puppet, const CharacterMovementPayload &payload) const;
-    };
-
-    class Network::UdpServer :
-        public Network::Service
-    {
-        UdpServer(const UdpServer &); // not implemented
-        void operator=(const UdpServer &); // not implemented
-    public:
-        UdpServer(Network &network, int port);
-        ~UdpServer();
-
-        void onReceive( const boost::system::error_code &e,
-                        size_t bytesTransferred);
-
-    private:
-        boost::asio::ip::udp::socket *mSocket;
+        boost::asio::ip::udp::endpoint mEndpoint;
 
         // using a boost array allows the size to be known,
         // so there's never a buffer overrun.
-        boost::array<char, sizeof Packet> mBuffer;
-
-        boost::asio::ip::udp::endpoint mClientEndpoint;
+        boost::array<char, sizeof Packet> mSendBuffer;
+        boost::array<char, sizeof Packet> mReceiveBuffer;
 
         void listenForOne();
-        void sendPacket(Packet &packet);
+
+        virtual void interpretNewClientPacket(const Packet &packet) = 0;
+        void interpretCharacterMovementPacket(const Packet &packet);
+
+        virtual void sendPlayerMovementPacket() = 0;
+        void repositionPuppet(Ptr &puppet, const CharacterMovementPayload &payload) const;
+        void makePlayerMovementPacket(Packet &out, const std::string &password) const;
+    };
+
+    class Network::Server :
+        public Network::Service
+    {
+        Server(const Server &); // not implemented
+        void operator=(const Server &); // not implemented
+    public:
+        Server(Network &network, int port);
+        ~Server();
+
+    private:
+        void interpretNewClientPacket(const Packet &packet);
+
+        void sendPacketToAll(Packet &packet);
+        void sendPacketToOne(Packet &packet, const boost::asio::ip::udp::endpoint &endpoint);
+        void sendPlayerMovementPacket();
         void acknowledgeClient(Ptr puppet);
     };
 
-    class Network::UdpClient :
+    class Network::Client :
         public Network::Service
     {
-        UdpClient(const UdpClient &); // not implemented
-        void operator=(const UdpClient &); // not implemented
+        Client(const Client &); // not implemented
+        void operator=(const Client &); // not implemented
     public:
-        /// \brief Maintains a UDP connection to a UdpServer.
+        /// \brief Maintains a UDP connection to a Server.
         /// \param address The endpoint url packets should be addressed to.
         /// \param contactRequest A packet of NewClient type to make the first contact with.
-        UdpClient(Network &network, const std::string &address, const Packet &contactRequest);
-        ~UdpClient();
+        Client(Network &network, const std::string &address, const Packet &contactRequest);
+        ~Client();
 
         void onReceiveAccept( const boost::system::error_code &e,
                               size_t bytesTransferred,
                               boost::asio::deadline_timer *timeout);
 
-        void update();
-
     private:
-        boost::asio::ip::udp::socket *mSocket;
-
-        boost::asio::ip::udp::endpoint mServerEndpoint;
         boost::asio::ip::udp::endpoint mMyEndpoint;
-
-        boost::array<char, sizeof Packet> mBuffer;
 
         bool mAccepted;
 
         std::string mPassword;
+
+        void interpretNewClientPacket(const Packet &packet){}
 
         void sendPacket(Packet &packet);
         void sendPlayerMovementPacket();
@@ -123,9 +133,9 @@ namespace MWWorld
 
     bool Network::getCharacterMovement(const std::string &puppetName, ESM::Position &out) const
     {
-        std::map<std::string, PuppetInfo>::const_iterator iter = mPuppets.find(puppetName);
+        std::map<std::string, ClientInfo>::const_iterator iter = mClients.find(puppetName);
 
-        if ( iter == mPuppets.end() )
+        if ( iter == mClients.end() )
             return false;
 
         // Asignment operator has no override in the POD struct.
@@ -157,7 +167,7 @@ namespace MWWorld
         // Gotta copy the data myself.
         strcpy( packet.payload.newClient.password, slotPassword.c_str() );
 
-        mService = new UdpClient(*this, address, packet );
+        mService = new Client(*this, address, packet );
         mIsServer = false;
     }
 
@@ -175,7 +185,7 @@ namespace MWWorld
         Misc::StringUtils::toLower(normalizedProtocol);
 
         if (protocol == "udp")
-            mService = new UdpServer(*this, port);
+            mService = new Server(*this, port);
         else if (protocol == "tcp")
             throw std::exception("TCP Servers aer not implemented yet, sorry!");
         else
@@ -198,22 +208,60 @@ namespace MWWorld
         if (!mService)
             throw std::exception("The network isn't open.");
 
-        std::map<std::string, PuppetInfo>::const_iterator iter = mPuppets.find(secretPhrase);
-        if (iter != mPuppets.end())
+        std::map<std::string, ClientInfo>::const_iterator iter = mClients.find(secretPhrase);
+        if (iter != mClients.end())
             throw std::exception("A user with that Secret Phrase already exists.");
 
-        PuppetInfo puppetInfo;
-        puppetInfo.ptr = npc;
-        puppetInfo.lastUpdate = 0; // Should be okay on all systems I hope
-        puppetInfo.currentMovement.pos[0] =
-        puppetInfo.currentMovement.pos[1] =
-        puppetInfo.currentMovement.pos[2] = 0;
+        ClientInfo clientInfo;
+        clientInfo.ptr = npc;
+        clientInfo.lastUpdate = 0; // Should be okay on all systems I hope
+        clientInfo.currentMovement.pos[0] =
+        clientInfo.currentMovement.pos[1] =
+        clientInfo.currentMovement.pos[2] = 0;
 
-        puppetInfo.currentMovement.rot[0] =
-        puppetInfo.currentMovement.rot[1] =
-        puppetInfo.currentMovement.rot[2] = 0;
+        clientInfo.currentMovement.rot[0] =
+        clientInfo.currentMovement.rot[1] =
+        clientInfo.currentMovement.rot[2] = 0;
 
-        mPuppets[secretPhrase] = puppetInfo;
+        mClients[secretPhrase] = clientInfo;
+    }
+
+    void Network::Service::listenForOne()
+    {
+        using namespace boost::asio::ip;
+
+        mSocket->async_receive_from(
+            boost::asio::buffer(mReceiveBuffer),
+            mEndpoint,
+            boost::bind(&Service::onReceive, this,
+                boost::asio::placeholders::error,
+                boost::asio::placeholders::bytes_transferred));
+    }
+
+    void Network::Service::interpretCharacterMovementPacket(const Packet &packet)
+    {
+        std::map<std::string, ClientInfo>::iterator iter = mNetwork->mClients.find(packet.payload.characterMovement.password);
+
+        // Puppet exists
+        if (iter !=  mNetwork->mClients.end())
+        {
+            if (packet.timestamp > iter->second.lastUpdate ) //The packet isn't stale
+            {
+                if ( memcmp(&packet.payload.characterMovement.movement, &iter->second.currentMovement, sizeof ESM::Position) != 0) // movement has changed
+                {
+                    repositionPuppet(iter->second.ptr, packet.payload.characterMovement);
+
+                    iter->second.lastUpdate = packet.timestamp;
+                }
+
+                // Remember the movement
+                for (size_t i = 0; i < 3; ++i)
+                {
+                    iter->second.currentMovement.pos[i] = packet.payload.characterMovement.movement.pos[i];
+                    iter->second.currentMovement.rot[i] = packet.payload.characterMovement.movement.rot[i];
+                }
+            }
+        }
     }
 
     void Network::Service::repositionPuppet(Ptr &puppet, const CharacterMovementPayload &payload) const
@@ -229,111 +277,129 @@ namespace MWWorld
         }
     }
 
+    void Network::Service::makePlayerMovementPacket(Packet &out, const std::string &password) const
+    {
+        out.type = Packet::CharacterMovement;
+
+        assert(password.length() < 32);
+        strcpy(out.payload.characterMovement.password, password.c_str());
+
+        Ptr player = MWBase::Environment::get().getWorld()->getPlayer().getPlayer();
+
+        const ESM::Position &refpos = player.getRefData().getPosition();
+        for (size_t i = 0; i < 3; ++i)
+        {
+            out.payload.characterMovement.movement.pos[i]        = player.getClass().getMovementSettings(player).mPosition[i];
+            out.payload.characterMovement.movement.rot[i]        = player.getClass().getMovementSettings(player).mRotation[i];
+            out.payload.characterMovement.currentPosition[i]     = refpos.pos[i];
+            out.payload.characterMovement.angle[i]               = refpos.rot[i];
+        }
+    }
+
     void Network::Service::update()
     {
         mIoService->poll();
+        if (mTicks++ > sTickRate)
+        {
+            mTicks = 0;
+            sendPlayerMovementPacket();
+        }
     }
 
-    Network::UdpServer::UdpServer(Network &network, int port) :
-        Service(network),
-        mSocket( new boost::asio::ip::udp::socket(*mIoService, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), port)))
+    void Network::Service::onReceive( const boost::system::error_code &e,
+                                      size_t bytesTransferred)
     {
+        if (!e)
+        {
+            Packet *receivedPacket = (Packet *)(mReceiveBuffer.c_array());
+
+            switch (receivedPacket->type)
+            {
+            case Packet::NewClient:
+                interpretNewClientPacket(*receivedPacket);
+                break;
+
+            case Packet::CharacterMovement:
+                interpretCharacterMovementPacket(*receivedPacket);
+
+            default:
+                break;
+            }
+        }
+
+        // listen for another if not aborting
+        if (e != boost::asio::error::operation_aborted)
+            listenForOne();
+    }
+
+    Network::Server::Server(Network &network, int port) :
+        Service(network)
+    {
+        mSocket = new boost::asio::ip::udp::socket(*mIoService, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), port));
         listenForOne();
     }
 
-    Network::UdpServer::~UdpServer()
+    Network::Server::~Server()
     {
         // Finish all callbacks to let them handle a server shutdown state.
         mSocket->shutdown(boost::asio::ip::udp::socket::shutdown_both);;
         mSocket->cancel();
         mIoService->run();
-
-        delete mSocket;
-        delete mIoService;
     }
 
-    void Network::UdpServer::onReceive( const boost::system::error_code &e,
-                                        size_t bytesTransferred)
+    void Network::Server::interpretNewClientPacket(const Packet &packet)
     {
-        if( e == boost::asio::error::operation_aborted )
-            return; // Just cleaning up
+        std::cout << "New client with Secret Phrase of '";
+        std::cout << packet.payload.newClient.password;
+        std::cout << "'." << std::endl;
 
-        Packet *receivedPacket = (Packet *)(mBuffer.c_array());
+        std::map<std::string, ClientInfo>::iterator iter = mNetwork->mClients.find(packet.payload.newClient.password);
 
-        switch (receivedPacket->type)
+        // Puppet exists
+        if (iter !=  mNetwork->mClients.end())
         {
-        case Packet::NewClient:
-            std::cout << "New client with Secret Phrase of '";
-            std::cout << receivedPacket->payload.newClient.password;
-            std::cout << "'." << std::endl;
-
-            {
-                std::map<std::string, PuppetInfo>::const_iterator iter = mNetwork->mPuppets.find(receivedPacket->payload.newClient.password);
-
-                // Puppet exists
-                if (iter !=  mNetwork->mPuppets.end())
-                    acknowledgeClient(iter->second.ptr);
-            }
-            break;
-
-        case Packet::CharacterMovement:
-            {
-                std::map<std::string, PuppetInfo>::iterator iter = mNetwork->mPuppets.find(receivedPacket->payload.characterMovement.password);
-
-                // Puppet exists
-                if (iter !=  mNetwork->mPuppets.end())
-                {
-                    if (receivedPacket->timestamp > iter->second.lastUpdate ) //The packet isn't stale
-                    {
-                        if ( memcmp(&receivedPacket->payload.characterMovement.movement, &iter->second.currentMovement, sizeof ESM::Position) != 0) // movement has changed
-                        {
-                            repositionPuppet(iter->second.ptr, receivedPacket->payload.characterMovement);
-
-                            iter->second.lastUpdate = receivedPacket->timestamp;
-                        }
-
-                        // Remember the movement
-                        for (size_t i = 0; i < 3; ++i)
-                        {
-                            iter->second.currentMovement.pos[i] = receivedPacket->payload.characterMovement.movement.pos[i];
-                            iter->second.currentMovement.rot[i] = receivedPacket->payload.characterMovement.movement.rot[i];
-                        }
-                    }
-                }
-            }
-
-        default:
-            break;
+            iter->second.endpoint = mEndpoint;
+            acknowledgeClient(iter->second.ptr);
         }
-
-        // listen for another.
-        listenForOne();
     }
 
-    void Network::UdpServer::listenForOne()
-    {
-        using namespace boost::asio::ip;
 
-        mSocket->async_receive_from(
-            boost::asio::buffer(mBuffer),
-            mClientEndpoint,
-            boost::bind(&UdpServer::onReceive, this,
-                boost::asio::placeholders::error,
-                boost::asio::placeholders::bytes_transferred));
-    }
-
-    void Network::UdpServer::sendPacket(Packet &packet)
+    void Network::Server::sendPacketToAll(Packet &packet)
     {
         packet.timestamp = clock();
 
         // Raw copy the packet
-        memcpy(mBuffer.c_array(), &packet, sizeof Packet);
+        memcpy(mSendBuffer.c_array(), &packet, sizeof Packet);
 
-        mSocket->async_send_to(boost::asio::buffer(mBuffer), mClientEndpoint,
-            boost::bind(&Service::doNothing, this));
+        std::map<std::string, ClientInfo>::const_iterator iter = mNetwork->mClients.begin();
+
+        boost::asio::mutable_buffers_1 buffer = boost::asio::buffer(mSendBuffer);
+        for (; iter != mNetwork->mClients.end(); ++iter)
+        {
+            mSocket->async_send_to(buffer, iter->second.endpoint,
+                boost::bind(&Service::doNothing, this));
+        }
     }
 
-    void Network::UdpServer::acknowledgeClient(Ptr puppet)
+    void Network::Server::sendPacketToOne(Packet &packet, const boost::asio::ip::udp::endpoint &endpoint)
+    {
+        packet.timestamp = clock();
+
+        // Raw copy the packet
+        memcpy(mSendBuffer.c_array(), &packet, sizeof Packet);
+
+        mSocket->async_send_to(boost::asio::buffer(mSendBuffer), endpoint,
+                boost::bind(&Service::doNothing, this));
+    }
+
+    void Network::Server::sendPlayerMovementPacket()
+    {
+        Packet packet;
+        makePlayerMovementPacket(packet, "host");
+        sendPacketToAll(packet);
+    }
+
+    void Network::Server::acknowledgeClient(Ptr puppet)
     {
         Packet packet;
         packet.type = Packet::AcceptClient;
@@ -373,152 +439,122 @@ namespace MWWorld
             strcpy(packet.payload.acceptClient.hostPuppet.password, "host");
         }
 
-        sendPacket(packet);
+        // Send to only the person who sent to me
+        sendPacketToOne(packet, mEndpoint);
     }
 
-    Network::UdpClient::UdpClient(Network &network, const std::string &address, const Packet &contactRequest) :
+    Network::Client::Client(Network &network, const std::string &address, const Packet &contactRequest) :
         Service(network),
-        mSocket(new boost::asio::ip::udp::socket(*mIoService)),
         mAccepted(false),
         mPassword(contactRequest.payload.newClient.password)
     {
         using namespace boost::asio::ip;
 
+        mSocket = new udp::socket(*mIoService);
+
         udp::resolver resolver(*mIoService);
         udp::resolver::query query(boost::asio::ip::udp::v4(), address, "5121");
-        mServerEndpoint = *resolver.resolve(query);
+        mEndpoint = *resolver.resolve(query);
 
         mSocket->open(udp::v4());
 
-        memcpy(mBuffer.c_array(), &contactRequest, sizeof Packet);
+        memcpy(mSendBuffer.c_array(), &contactRequest, sizeof Packet);
+        mSocket->send_to(boost::asio::buffer(mSendBuffer), mEndpoint);
 
-        mSocket->send_to(boost::asio::buffer(mBuffer), mServerEndpoint);
-
-        boost::asio::deadline_timer timeout(*mIoService, boost::posix_time::seconds(1) );
+        boost::asio::deadline_timer timeout(*mIoService, boost::posix_time::seconds(3) );
 
         mSocket->async_receive(
-            boost::asio::buffer(mBuffer),
-            boost::bind(&UdpClient::onReceiveAccept, this,
+            boost::asio::buffer(mReceiveBuffer),
+            boost::bind(&Client::onReceiveAccept, this,
                 boost::asio::placeholders::error,
                 boost::asio::placeholders::bytes_transferred, &timeout));
 
-        for ( int i = 5; i > 0; ++i )
+        mIoService->poll();
+
+        for ( int i = 1; i <= 5; ++i )
         {
-            std::cout << "Connecting " << i;
-            mSocket->send_to(boost::asio::buffer(mBuffer), mServerEndpoint);
+            std::cout << "Connecting (Attempt " << i << "/5)" << std::endl;
+            mSocket->send_to(boost::asio::buffer(mSendBuffer), mEndpoint);
             timeout.wait();
 
-            mIoService->run_one();
+            mIoService->poll();
 
             if (mAccepted)
                 break;
 
-            timeout.expires_at( timeout.expires_at() + boost::posix_time::seconds(1) );
+            timeout.expires_at( timeout.expires_at() + boost::posix_time::seconds(3) );
         }
 
         if (!mAccepted)
             throw std::exception(("Could not connect to " + address).c_str());
     }
 
-    Network::UdpClient::~UdpClient()
+    Network::Client::~Client()
     {
         // Finish all callbacks to let them handle a server shutdown state.
         mSocket->shutdown(boost::asio::ip::udp::socket::shutdown_both);;
         mSocket->cancel();
         mIoService->run();
-
-        delete mSocket;
-        delete mIoService;
     }
 
-    void Network::UdpClient::onReceiveAccept( const boost::system::error_code &e,
+    void Network::Client::onReceiveAccept( const boost::system::error_code &e,
             size_t bytesTransferred,
             boost::asio::deadline_timer *timeout)
     {
-        // TODO Once properly checking for different errors, this is good code.
-        //if( e == boost::asio::error::operation_aborted )
-            //return; // Just cleaning up
+        if (e != 0)
+            return;
 
-        if (e == 0)
+        Packet *packet= (Packet *)(mReceiveBuffer.c_array());
+        if (packet->type == Packet::AcceptClient)
         {
-            Packet *packet= (Packet *)(mBuffer.c_array());
-            switch (packet->type)
+            std::cout << "The server acknowledged me. Maintaining Connection" << std::endl;
+
+            mAccepted = true;
+            timeout->cancel();
+
+            if (packet->payload.acceptClient.isExterior)
             {
-            case Packet::AcceptClient:
-                std::cout << "The server acknowledged me. Maintaining Connection" << std::endl;
-
-                mAccepted = true;
-                timeout->cancel();
-
-                if (packet->payload.acceptClient.isExterior)
-                {
-                    MWBase::World *world = MWBase::Environment::get().getWorld();
-                    world->changeToExteriorCell(packet->payload.acceptClient.position);
-                }
-                else
-                {
-                    // If the cell name somehow got corrupted undetected, ending the string
-                    // ensures that there won't be a buffer overrun.
-                    /// \fixme Is this needed or not? Can someone with experience look into it?
-                    packet->payload.acceptClient.cellName[63] = '\0';
-
-                    MWBase::World *world = MWBase::Environment::get().getWorld();
-                    world->changeToInteriorCell(packet->payload.acceptClient.cellName,
-                                                packet->payload.acceptClient.position);
-                }
-
-                createPuppetNpc(packet->payload.acceptClient.hostPuppet);
-
-            default:
-                break;
+                MWBase::World *world = MWBase::Environment::get().getWorld();
+                world->changeToExteriorCell(packet->payload.acceptClient.position);
             }
+            else
+            {
+                // If the cell name somehow got corrupted undetected, ending the string
+                // ensures that there won't be a buffer overrun.
+                /// \fixme Is this needed or not? Can someone with experience look into it?
+                packet->payload.acceptClient.cellName[63] = '\0';
+
+                MWBase::World *world = MWBase::Environment::get().getWorld();
+                world->changeToInteriorCell(packet->payload.acceptClient.cellName,
+                                            packet->payload.acceptClient.position);
+            }
+
+            //createPuppetNpc(packet->payload.acceptClient.hostPuppet);
+
+            // Start listening for regular updates
+            //listenForOne();
         }
     }
 
-    void Network::UdpClient::update()
-    {
-        if (mTicks++ > sTickRate)
-        {
-            mTicks = 0;
-            sendPlayerMovementPacket();
-            mIoService->poll();
-        }
-    }
-
-    void Network::UdpClient::sendPacket(Packet &packet)
+    void Network::Client::sendPacket(Packet &packet)
     {
         packet.timestamp = clock();
 
         // Raw copy the packet
-        memcpy(mBuffer.c_array(), &packet, sizeof Packet);
+        memcpy(mSendBuffer.c_array(), &packet, sizeof Packet);
 
-        mSocket->async_send_to(boost::asio::buffer(mBuffer), mServerEndpoint,
+        mSocket->async_send_to(boost::asio::buffer(mSendBuffer), mEndpoint,
             boost::bind(&Service::doNothing, this));
     }
 
-    void Network::UdpClient::sendPlayerMovementPacket()
+    void Network::Client::sendPlayerMovementPacket()
     {
         Packet packet;
-        packet.type = Packet::CharacterMovement;
-
-        assert(mPassword.length() < 32);
-        strcpy(packet.payload.characterMovement.password, mPassword.c_str());
-
-        Ptr player = MWBase::Environment::get().getWorld()->getPlayer().getPlayer();
-
-        const ESM::Position &refpos = player.getRefData().getPosition();
-        for (size_t i = 0; i < 3; ++i)
-        {
-            packet.payload.characterMovement.movement.pos[i]        = player.getClass().getMovementSettings(player).mPosition[i];
-            packet.payload.characterMovement.movement.rot[i]        = player.getClass().getMovementSettings(player).mRotation[i];
-            packet.payload.characterMovement.currentPosition[i]     = refpos.pos[i];
-            packet.payload.characterMovement.angle[i]               = refpos.rot[i];
-        }
-
+        makePlayerMovementPacket(packet, mPassword);
         sendPacket(packet);
     }
 
-    void Network::UdpClient::createPuppetNpc(const NewPuppetPayload &puppetInfo)
+    void Network::Client::createPuppetNpc(const NewPuppetPayload &puppetInfo)
     {
         MWWorld::CellStore* store = MWBase::Environment::get().getWorld()->getPlayer().getPlayer().getCell();                    
 
@@ -532,6 +568,8 @@ namespace MWWorld
         MWMechanics::AiPuppet aiPackage(puppetInfo.password);
         puppet.getClass().getCreatureStats(puppet).getAiSequence().stack(aiPackage);
 
-        MWBase::Environment::get().getWorld()->safePlaceObject(ref.getPtr(), *store, puppetInfo.position );
+        MWBase::Environment::get().getWorld()->safePlaceObject(puppet, *store, puppetInfo.position );
+
+        mNetwork->createPuppet(puppetInfo.password, puppet);
     }
 }
