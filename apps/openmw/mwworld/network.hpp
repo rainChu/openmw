@@ -36,15 +36,22 @@ namespace MWWorld
         struct CharacterMovementPayload
         {
             /// \fixme can't we identify by endpoint instead?
-            char mPassword[32];
+            char password[32];
 
-            MWMechanics::CharacterState mMovementState;
+            MWMechanics::CharacterState movementState;
 
-            ESM::Position mMovement;
+            ESM::Position movement;
 
             /// \todo make these into an ESM::Position
-            float mCurrentPosition[3];
-            float mAngle[3];
+            float currentPosition[3];
+            float angle[3];
+        };
+
+        struct NewPuppetPayload
+        {
+            char password[32];
+            ESM::Position position;
+            ESM::Position movement;
         };
 
         struct Packet
@@ -72,11 +79,14 @@ namespace MWWorld
             {
                 /// Sent on a typical client update.
                 CharacterMovementPayload characterMovement;
+
+                /// Sent when a new player arrives
+                NewPuppetPayload newPuppet;
                 
                 /// Sent from the client to request connection
                 struct
                 {
-                    char mPassword[32];
+                    char password[32];
                 } newClient;
 
                 /// Sent from the server when a new client is accepted.
@@ -86,7 +96,11 @@ namespace MWWorld
                     /// \fixme find out the actual max length of a cell name
                     char cellName[64];
                     ESM::Position position;
+
+                    NewPuppetPayload hostPuppet;
                 } acceptClient;
+
+                
 
                 MessageCode messageCode;
             } payload;

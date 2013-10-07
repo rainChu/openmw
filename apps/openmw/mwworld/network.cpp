@@ -10,6 +10,9 @@
 #include "../mwworld/player.hpp"
 #include "../mwworld/class.hpp"
 #include "../mwmechanics/movement.hpp"
+#include "../mwmechanics/aipuppet.hpp"
+#include "../mwmechanics/creaturestats.hpp"
+#include "../mwworld/manualref.hpp"
 
 namespace MWWorld
 {
@@ -97,6 +100,7 @@ namespace MWWorld
 
         void sendPacket(Packet &packet);
         void sendPlayerMovementPacket();
+        void createPuppetNpc(const NewPuppetPayload &puppetInfo);
     };
 
 
@@ -151,7 +155,7 @@ namespace MWWorld
         packet.type = Packet::NewClient;
 
         // Gotta copy the data myself.
-        strcpy( packet.payload.newClient.mPassword, slotPassword.c_str() );
+        strcpy( packet.payload.newClient.password, slotPassword.c_str() );
 
         mService = new UdpClient(*this, address, packet );
         mIsServer = false;
@@ -219,9 +223,9 @@ namespace MWWorld
         ESM::Position &refpos = puppet.getRefData().getPosition();
         for (size_t i = 0; i < 3; ++i)
         {
-            refpos.rot[i] = payload.mAngle[i];
+            refpos.rot[i] = payload.angle[i];
             puppet.getClass().getMovementSettings(puppet).mPosition[i];
-            refpos.pos[i] = payload.mCurrentPosition[i];
+            refpos.pos[i] = payload.currentPosition[i];
         }
     }
 
@@ -260,11 +264,11 @@ namespace MWWorld
         {
         case Packet::NewClient:
             std::cout << "New client with Secret Phrase of '";
-            std::cout << receivedPacket->payload.newClient.mPassword;
+            std::cout << receivedPacket->payload.newClient.password;
             std::cout << "'." << std::endl;
 
             {
-                std::map<std::string, PuppetInfo>::const_iterator iter = mNetwork->mPuppets.find(receivedPacket->payload.newClient.mPassword);
+                std::map<std::string, PuppetInfo>::const_iterator iter = mNetwork->mPuppets.find(receivedPacket->payload.newClient.password);
 
                 // Puppet exists
                 if (iter !=  mNetwork->mPuppets.end())
@@ -274,14 +278,14 @@ namespace MWWorld
 
         case Packet::CharacterMovement:
             {
-                std::map<std::string, PuppetInfo>::iterator iter = mNetwork->mPuppets.find(receivedPacket->payload.characterMovement.mPassword);
+                std::map<std::string, PuppetInfo>::iterator iter = mNetwork->mPuppets.find(receivedPacket->payload.characterMovement.password);
 
                 // Puppet exists
                 if (iter !=  mNetwork->mPuppets.end())
                 {
                     if (receivedPacket->timestamp > iter->second.lastUpdate ) //The packet isn't stale
                     {
-                        if ( memcmp(&receivedPacket->payload.characterMovement.mMovement, &iter->second.currentMovement, sizeof ESM::Position) != 0) // movement has changed
+                        if ( memcmp(&receivedPacket->payload.characterMovement.movement, &iter->second.currentMovement, sizeof ESM::Position) != 0) // movement has changed
                         {
                             repositionPuppet(iter->second.ptr, receivedPacket->payload.characterMovement);
 
@@ -291,8 +295,8 @@ namespace MWWorld
                         // Remember the movement
                         for (size_t i = 0; i < 3; ++i)
                         {
-                            iter->second.currentMovement.pos[i] = receivedPacket->payload.characterMovement.mMovement.pos[i];
-                            iter->second.currentMovement.rot[i] = receivedPacket->payload.characterMovement.mMovement.rot[i];
+                            iter->second.currentMovement.pos[i] = receivedPacket->payload.characterMovement.movement.pos[i];
+                            iter->second.currentMovement.rot[i] = receivedPacket->payload.characterMovement.movement.rot[i];
                         }
                     }
                 }
@@ -336,6 +340,7 @@ namespace MWWorld
 
         MWBase::World *world = MWBase::Environment::get().getWorld();
 
+        // Set the cell to travel to
         const ESM::Cell *cell = puppet.getCell()->mCell;
         if ( cell->isExterior() )
             packet.payload.acceptClient.isExterior = true;
@@ -347,11 +352,25 @@ namespace MWWorld
             strcpy(packet.payload.acceptClient.cellName, world->getCurrentCellName().c_str());
         }
 
-        ESM::Position *position = &puppet.getRefData().getPosition();
+        ESM::Position *clientPosition = &puppet.getRefData().getPosition();
+
+        Ptr player = world->getPlayer().getPlayer();
+        ESM::Position *hostPosition = &player.getRefData().getPosition();
+        MWMechanics::Movement *hostMovement = &player.getClass().getMovementSettings(player);
         for (size_t i = 0; i < 3; ++i)
         {
-            packet.payload.acceptClient.position.pos[i] = position->pos[i];
-            packet.payload.acceptClient.position.rot[i] = position->rot[i];
+            // Set the position of the client's puppet
+            packet.payload.acceptClient.position.pos[i] = clientPosition->pos[i];
+            packet.payload.acceptClient.position.rot[i] = clientPosition->rot[i];
+
+            // Set the host's puppet
+            packet.payload.acceptClient.hostPuppet.position.pos[i] = hostPosition->pos[i];
+            packet.payload.acceptClient.hostPuppet.position.rot[i] = hostPosition->rot[i];
+
+            packet.payload.acceptClient.hostPuppet.movement.pos[i] = hostMovement->mPosition[i];
+            packet.payload.acceptClient.hostPuppet.movement.rot[i] = hostMovement->mRotation[i];
+
+            strcpy(packet.payload.acceptClient.hostPuppet.password, "host");
         }
 
         sendPacket(packet);
@@ -361,7 +380,7 @@ namespace MWWorld
         Service(network),
         mSocket(new boost::asio::ip::udp::socket(*mIoService)),
         mAccepted(false),
-        mPassword(contactRequest.payload.newClient.mPassword)
+        mPassword(contactRequest.payload.newClient.password)
     {
         using namespace boost::asio::ip;
 
@@ -447,6 +466,9 @@ namespace MWWorld
                     world->changeToInteriorCell(packet->payload.acceptClient.cellName,
                                                 packet->payload.acceptClient.position);
                 }
+
+                createPuppetNpc(packet->payload.acceptClient.hostPuppet);
+
             default:
                 break;
             }
@@ -480,19 +502,36 @@ namespace MWWorld
         packet.type = Packet::CharacterMovement;
 
         assert(mPassword.length() < 32);
-        strcpy(packet.payload.characterMovement.mPassword, mPassword.c_str());
+        strcpy(packet.payload.characterMovement.password, mPassword.c_str());
 
         Ptr player = MWBase::Environment::get().getWorld()->getPlayer().getPlayer();
 
         const ESM::Position &refpos = player.getRefData().getPosition();
         for (size_t i = 0; i < 3; ++i)
         {
-            packet.payload.characterMovement.mMovement.pos[i]        = player.getClass().getMovementSettings(player).mPosition[i];
-            packet.payload.characterMovement.mMovement.rot[i]        = player.getClass().getMovementSettings(player).mRotation[i];
-            packet.payload.characterMovement.mCurrentPosition[i]     = refpos.pos[i];
-            packet.payload.characterMovement.mAngle[i]               = refpos.rot[i];
+            packet.payload.characterMovement.movement.pos[i]        = player.getClass().getMovementSettings(player).mPosition[i];
+            packet.payload.characterMovement.movement.rot[i]        = player.getClass().getMovementSettings(player).mRotation[i];
+            packet.payload.characterMovement.currentPosition[i]     = refpos.pos[i];
+            packet.payload.characterMovement.angle[i]               = refpos.rot[i];
         }
 
         sendPacket(packet);
+    }
+
+    void Network::UdpClient::createPuppetNpc(const NewPuppetPayload &puppetInfo)
+    {
+        MWWorld::CellStore* store = MWBase::Environment::get().getWorld()->getPlayer().getPlayer().getCell();                    
+
+        // TODO transfer the NPC head/body/hair itself
+        MWWorld::ManualRef ref(MWBase::Environment::get().getWorld()->getStore(), "Fargoth");
+
+        Ptr puppet = ref.getPtr();
+        puppet.getCellRef().mPos = puppetInfo.position;
+        puppet.getRefData().setCount(1);
+
+        MWMechanics::AiPuppet aiPackage(puppetInfo.password);
+        puppet.getClass().getCreatureStats(puppet).getAiSequence().stack(aiPackage);
+
+        MWBase::Environment::get().getWorld()->safePlaceObject(ref.getPtr(), *store, puppetInfo.position );
     }
 }
