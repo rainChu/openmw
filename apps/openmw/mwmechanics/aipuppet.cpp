@@ -20,14 +20,8 @@ namespace MWMechanics
 
     bool AiPuppet::execute (const MWWorld::Ptr& actor)
     {
-        ESM::Position position;
-        MWBase::Environment::get().getWorld()->getNetwork().getCharacterMovement(mName, position);
-
-        for (size_t i = 0; i < 3; ++i)
-        {
-            actor.getClass().getMovementSettings(actor).mPosition[i] = position.pos[i];
-            actor.getClass().getMovementSettings(actor).mRotation[i] = position.rot[i];
-        }
+        MWWorld::Network &network = MWBase::Environment::get().getWorld()->getNetwork();
+        network.getCharacterMovement(mName, actor.getClass().getMovementSettings(actor));
 
         return false;
     }

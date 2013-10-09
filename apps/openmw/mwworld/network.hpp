@@ -107,10 +107,10 @@ namespace MWWorld
         };
 
         /// \brief Gets the movement of a puppet in the network
-        /// \param puppetName[in] The name of the puppet to get.
-        /// \param out[out] The position of the puppet is returned.
-        /// \return true if the puppet existed, if false out is undefined.
-        bool getCharacterMovement(const std::string &puppetName, ESM::Position &out) const;
+        /// \param puppetName The name of the puppet to get.
+        /// \param out The movement is returned.
+        /// \exception std::runtime_error Throws an exception if the puppet does not exist
+        void getCharacterMovement(const std::string &puppetName, MWMechanics::Movement &out) const;
 
         /// \brief Connects to a remote server.
         /// \param address a human-friendly address such as "localhost:1337" or "192.168.0.103:1337"

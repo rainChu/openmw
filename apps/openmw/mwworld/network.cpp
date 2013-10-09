@@ -131,21 +131,18 @@ namespace MWWorld
             mService->update();
     }
 
-    bool Network::getCharacterMovement(const std::string &puppetName, ESM::Position &out) const
+    void Network::getCharacterMovement(const std::string &puppetName, MWMechanics::Movement &out) const
     {
         std::map<std::string, ClientInfo>::const_iterator iter = mClients.find(puppetName);
 
         if ( iter == mClients.end() )
-            return false;
+            throw std::runtime_error("Puppet does not exist");
 
-        // Asignment operator has no override in the POD struct.
         for (size_t i = 0; i < 3; ++i)
         {
-            out.pos[i] = iter->second.currentMovement.pos[i];
-            out.rot[i] = iter->second.currentMovement.rot[i];
+            out.mPosition[i] = iter->second.currentMovement.pos[i];
+            out.mRotation[i] = iter->second.currentMovement.rot[i];
         }
-
-        return true;
     }
 
     void Network::connect(const std::string &address, const std::string &slotPassword)
@@ -210,7 +207,7 @@ namespace MWWorld
             throw std::exception("A user with that Secret Phrase already exists.");
 
         ClientInfo clientInfo;
-        //clientInfo.ptr = npc;
+
         clientInfo.lastUpdate = 0; // Should be okay on all systems I hope
         clientInfo.currentMovement.pos[0] =
         clientInfo.currentMovement.pos[1] =
@@ -248,7 +245,7 @@ namespace MWWorld
             Ptr puppet;
             try
             {
-                puppet = MWBase::Environment::get().getWorld()->getPtr(iter->second.refId, true);
+                puppet = MWBase::Environment::get().getWorld()->getPtr(iter->second.refId, false);
                 hasPtr = true;
             }
             catch (std::runtime_error)
@@ -256,19 +253,15 @@ namespace MWWorld
                 hasPtr = false;
             }
 
-            if (hasPtr && packet.timestamp > iter->second.lastUpdate ) //The packet isn't stale
+            if (hasPtr && packet.timestamp > iter->second.lastUpdate) //The packet isn't stale
             {
                 if ( memcmp(&packet.payload.characterMovement.movement, &iter->second.currentMovement, sizeof ESM::Position) != 0) // movement has changed
                 {
                     repositionPuppet(puppet, packet.payload.characterMovement);
                     iter->second.lastUpdate = packet.timestamp;
-                }
 
-                // Remember the movement
-                for (size_t i = 0; i < 3; ++i)
-                {
-                    iter->second.currentMovement.pos[i] = packet.payload.characterMovement.movement.pos[i];
-                    iter->second.currentMovement.rot[i] = packet.payload.characterMovement.movement.rot[i];
+                    // Remember the movement
+                    iter->second.currentMovement = packet.payload.characterMovement.movement;
                 }
             }
         }
@@ -435,21 +428,17 @@ namespace MWWorld
         Ptr player = world->getPlayer().getPlayer();
         ESM::Position *hostPosition = &player.getRefData().getPosition();
         MWMechanics::Movement *hostMovement = &player.getClass().getMovementSettings(player);
+
+        packet.payload.acceptClient.position            = *clientPosition;
+        packet.payload.acceptClient.hostPuppet.position = *hostPosition;
+
         for (size_t i = 0; i < 3; ++i)
         {
-            // Set the position of the client's puppet
-            packet.payload.acceptClient.position.pos[i] = clientPosition->pos[i];
-            packet.payload.acceptClient.position.rot[i] = clientPosition->rot[i];
-
-            // Set the host's puppet
-            packet.payload.acceptClient.hostPuppet.position.pos[i] = hostPosition->pos[i];
-            packet.payload.acceptClient.hostPuppet.position.rot[i] = hostPosition->rot[i];
-
             packet.payload.acceptClient.hostPuppet.movement.pos[i] = hostMovement->mPosition[i];
             packet.payload.acceptClient.hostPuppet.movement.rot[i] = hostMovement->mRotation[i];
-
-            strcpy(packet.payload.acceptClient.hostPuppet.password, "host");
         }
+
+        strcpy(packet.payload.acceptClient.hostPuppet.password, "host");
 
         // Send to only the person who sent to me
         sendPacketToOne(packet, mEndpoint);
