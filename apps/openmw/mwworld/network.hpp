@@ -150,7 +150,7 @@ namespace MWWorld
 
         struct ClientInfo
         {
-            Ptr                            ptr;
+            std::string                    refId;
             clock_t                        lastUpdate;
             ESM::Position                  currentMovement;
             boost::asio::ip::udp::endpoint endpoint;

@@ -205,15 +205,12 @@ namespace MWWorld
 
     void Network::createPuppet(const std::string &secretPhrase, const Ptr &npc)
     {
-        if (!mService)
-            throw std::exception("The network isn't open.");
-
         std::map<std::string, ClientInfo>::const_iterator iter = mClients.find(secretPhrase);
         if (iter != mClients.end())
             throw std::exception("A user with that Secret Phrase already exists.");
 
         ClientInfo clientInfo;
-        clientInfo.ptr = npc;
+        //clientInfo.ptr = npc;
         clientInfo.lastUpdate = 0; // Should be okay on all systems I hope
         clientInfo.currentMovement.pos[0] =
         clientInfo.currentMovement.pos[1] =
@@ -222,6 +219,8 @@ namespace MWWorld
         clientInfo.currentMovement.rot[0] =
         clientInfo.currentMovement.rot[1] =
         clientInfo.currentMovement.rot[2] = 0;
+
+        clientInfo.refId = npc.getCellRef().mRefID;
 
         mClients[secretPhrase] = clientInfo;
     }
@@ -245,12 +244,23 @@ namespace MWWorld
         // Puppet exists
         if (iter !=  mNetwork->mClients.end())
         {
-            if (packet.timestamp > iter->second.lastUpdate ) //The packet isn't stale
+            bool hasPtr;
+            Ptr puppet;
+            try
+            {
+                puppet = MWBase::Environment::get().getWorld()->getPtr(iter->second.refId, true);
+                hasPtr = true;
+            }
+            catch (std::runtime_error)
+            {
+                hasPtr = false;
+            }
+
+            if (hasPtr && packet.timestamp > iter->second.lastUpdate ) //The packet isn't stale
             {
                 if ( memcmp(&packet.payload.characterMovement.movement, &iter->second.currentMovement, sizeof ESM::Position) != 0) // movement has changed
                 {
-                    repositionPuppet(iter->second.ptr, packet.payload.characterMovement);
-
+                    repositionPuppet(puppet, packet.payload.characterMovement);
                     iter->second.lastUpdate = packet.timestamp;
                 }
 
@@ -266,7 +276,7 @@ namespace MWWorld
 
     void Network::Service::repositionPuppet(Ptr &puppet, const CharacterMovementPayload &payload) const
     {
-        /// \todo deal with changing cells
+        /// \todo deal with changing exterior/interior
 
         ESM::Position &refpos = puppet.getRefData().getPosition();
         for (size_t i = 0; i < 3; ++i)
@@ -359,7 +369,9 @@ namespace MWWorld
         if (iter !=  mNetwork->mClients.end())
         {
             iter->second.endpoint = mEndpoint;
-            acknowledgeClient(iter->second.ptr);
+            
+            Ptr puppet = MWBase::Environment::get().getWorld()->getPtr(iter->second.refId, false);
+            acknowledgeClient(puppet);
         }
     }
 
@@ -529,10 +541,10 @@ namespace MWWorld
                                             packet->payload.acceptClient.position);
             }
 
-            //createPuppetNpc(packet->payload.acceptClient.hostPuppet);
+            createPuppetNpc(packet->payload.acceptClient.hostPuppet);
 
             // Start listening for regular updates
-            //listenForOne();
+            listenForOne();
         }
     }
 
