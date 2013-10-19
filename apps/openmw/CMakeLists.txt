@@ -45,7 +45,7 @@ add_openmw_dir (mwscript
     locals scriptmanagerimp compilercontext interpretercontext cellextensions miscextensions
     guiextensions soundextensions skyextensions statsextensions containerextensions
     aiextensions controlextensions extensions globalscripts ref dialogueextensions
-    animationextensions transformationextensions consoleextensions userextensions locals
+    animationextensions transformationextensions consoleextensions userextensions networkextensions
     )
 
 add_openmw_dir (mwsound
@@ -56,7 +56,7 @@ add_openmw_dir (mwworld
     refdata worldimp physicssystem scene globals class action nullaction actionteleport
     containerstore actiontalk actiontake manualref player cellfunctors failedaction
     cells localscripts customdata weather inventorystore ptr actionopen actionread
-    actionequip timestamp actionalchemy cellstore actionapply actioneat
+    actionequip timestamp actionalchemy cellstore actionapply actioneat network
     esmstore store recordcmp fallback actionrepair actionsoulgem livecellref actiondoor
     )
 
@@ -68,7 +68,7 @@ add_openmw_dir (mwclass
 add_openmw_dir (mwmechanics
     mechanicsmanagerimp stat character creaturestats magiceffects movement actors objects
     drawstate spells activespells npcstats aipackage aisequence alchemy aiwander aitravel aifollow
-    aiescort aiactivate repair enchanting pathfinding security
+    aiescort aiactivate repair enchanting pathfinding security aipuppet
     )
 
 add_openmw_dir (mwbase
