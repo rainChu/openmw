@@ -616,9 +616,21 @@ namespace MWWorld
         newRecord.mClass = puppetInfo.npcClass;
 
         newRecord.mNpdtType = 52;
+
         // TODO do stats properly
         newRecord.mNpdt52.mHealth = 50;
         newRecord.mNpdt52.mLevel  = 1;
+        newRecord.mNpdt52.mSpeed  = 50;
+        newRecord.mNpdt52.mAgility = 50;
+        newRecord.mNpdt52.mDisposition = 50;
+        newRecord.mNpdt52.mEndurance = 50;
+        newRecord.mNpdt52.mFatigue = 50;
+        newRecord.mNpdt52.mIntelligence = 50;
+        newRecord.mNpdt52.mLuck = 50;
+        newRecord.mNpdt52.mMana = 50;
+        newRecord.mNpdt52.mPersonality = 50;
+        newRecord.mNpdt52.mStrength = 50;
+        newRecord.mNpdt52.mWillpower = 50;
 
         newRecord.mName = "Derp";
 
