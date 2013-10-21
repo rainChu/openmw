@@ -31,7 +31,8 @@
 #include "mwworld/class.hpp"
 #include "mwworld/player.hpp"
 #include "mwworld/worldimp.hpp"
-#include "mwworld/network.hpp"
+
+#include "mwnetwork/networkimp.hpp"
 
 #include "mwclass/classes.hpp"
 
@@ -111,7 +112,7 @@ bool OMW::Engine::frameRenderingQueued (const Ogre::FrameEvent& evt)
             MWBase::Environment::get().getWorld()->markCellAsUnchanged();
 
         // update network
-        MWBase::Environment::get().getWorld()->getNetwork().update();
+        MWBase::Environment::get().getNetwork()->update();
 
         // update actors
         MWBase::Environment::get().getMechanicsManager()->update(frametime,
@@ -439,6 +440,9 @@ void OMW::Engine::prepareEngine (Settings::Manager & settings)
     // Create dialog system
     mEnvironment.setJournal (new MWDialogue::Journal);
     mEnvironment.setDialogueManager (new MWDialogue::DialogueManager (mExtensions, mVerboseScripts, mTranslationDataStorage));
+
+    // Create network system
+    mEnvironment.setNetwork(new MWNetwork::Network);
 
     mEnvironment.getWorld()->renderPlayer();
 

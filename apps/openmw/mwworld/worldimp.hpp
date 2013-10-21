@@ -62,7 +62,6 @@ namespace MWWorld
             LocalScripts mLocalScripts;
             MWWorld::Globals *mGlobalVariables;
             MWWorld::PhysicsSystem *mPhysics;
-            MWWorld::Network *mNetwork;
             bool mSky;
 
             Cells mCells;
@@ -142,8 +141,6 @@ namespace MWWorld
             virtual void toggleWater();
 
             virtual void adjustSky();
-
-            virtual Network &getNetwork();
 
             virtual void getTriangleBatchCount(unsigned int &triangles, unsigned int &batches);
 

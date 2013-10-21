@@ -36,7 +36,8 @@
 #include "../mwworld/player.hpp"
 #include "../mwworld/class.hpp"
 #include "../mwworld/inventorystore.hpp"
-#include "../mwworld/network.hpp"
+
+#include "../mwnetwork/networkimp.hpp"
 
 namespace
 {
@@ -877,8 +878,6 @@ void CharacterController::update(float duration)
 
         world->queueMovement(mPtr, vec);
         movement = vec;
-
-        MWWorld::Network::CharacterMovementPayload payload;
     }
     else if(cls.getCreatureStats(mPtr).isDead())
     {

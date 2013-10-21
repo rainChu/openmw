@@ -10,10 +10,11 @@
 #include "../mwbase/world.hpp"
 
 #include "../mwworld/class.hpp"
-#include "../mwworld/network.hpp"
 
 #include "../mwmechanics/aipuppet.hpp"
 #include "../mwmechanics/creaturestats.hpp"
+
+#include "../mwnetwork/networkimp.hpp"
 
 #include "interpretercontext.hpp"
 #include "ref.hpp"
@@ -35,7 +36,7 @@ namespace MWScript
                 runtime.pop();
 
                 runtime.getContext().report("Connecting to <" + address + "> ...");
-                MWBase::Environment::get().getWorld()->getNetwork().connect(address, password);
+                MWBase::Environment::get().getNetwork()->connect(address, password);
                 runtime.getContext().report("Connected.");
             }
         };
@@ -55,7 +56,7 @@ namespace MWScript
                 runtime.pop();
 
                 runtime.getContext().report( "Opening a server on port " + lexical_cast<std::string>(port) + "." );
-                MWBase::Environment::get().getWorld()->getNetwork().openServer(port, protocol);
+                MWBase::Environment::get().getNetwork()->openServer(port, protocol);
                 runtime.getContext().report("Server open.");
             }
         };
@@ -66,7 +67,7 @@ namespace MWScript
 
             virtual void execute (Interpreter::Runtime& runtime)
             {
-                MWBase::Environment::get().getWorld()->getNetwork().close();
+                MWBase::Environment::get().getNetwork()->close();
                 runtime.getContext().report("Server Closed");
             }
         };
@@ -85,7 +86,7 @@ namespace MWScript
 
                     MWBase::World *world = MWBase::Environment::get().getWorld();
 
-                    world->getNetwork().createPuppet(secretPhrase, ptr);
+                    MWBase::Environment::get().getNetwork()->createPuppet(secretPhrase, ptr);
 
                     MWMechanics::AiPuppet aiPackage(secretPhrase);
                     MWWorld::Class::get (ptr).getCreatureStats(ptr).getAiSequence().stack(aiPackage);

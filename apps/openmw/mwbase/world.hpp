@@ -58,7 +58,6 @@ namespace MWWorld
     class TimeStamp;
     class ESMStore;
     class RefData;
-    class Network;
 
     typedef std::vector<std::pair<MWWorld::Ptr,MWMechanics::Movement> > PtrMovementList;
 }
@@ -109,7 +108,6 @@ namespace MWBase
             virtual void toggleWater() = 0;
 
             virtual void adjustSky() = 0;
-            virtual MWWorld::Network &getNetwork() = 0;
 
             virtual void getTriangleBatchCount(unsigned int &triangles, unsigned int &batches) = 0;
 

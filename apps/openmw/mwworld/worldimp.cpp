@@ -23,6 +23,8 @@
 #include "../mwrender/sky.hpp"
 #include "../mwrender/animation.hpp"
 
+#include "../mwnetwork/networkimp.hpp"
+
 #include "../mwclass/door.hpp"
 
 #include "player.hpp"
@@ -30,7 +32,6 @@
 #include "cellfunctors.hpp"
 #include "containerstore.hpp"
 #include "inventorystore.hpp"
-#include "network.hpp"
 
 using namespace Ogre;
 
@@ -162,11 +163,6 @@ namespace MWWorld
             mRendering->skyDisable();
     }
 
-    MWWorld::Network &World::getNetwork()
-    {
-        return *mNetwork;
-    }
-
     World::World (OEngine::Render::OgreRenderer& renderer,
         const Files::Collections& fileCollections,
         const std::vector<std::string>& master, const std::vector<std::string>& plugins,
@@ -178,8 +174,6 @@ namespace MWWorld
       mFallback(fallbackMap), mPlayIntro(0), mTeleportEnabled(true),
       mFacedDistance(FLT_MAX), mGodMode(false)
     {
-        mNetwork = new MWWorld::Network;
-
         mPhysics = new PhysicsSystem(renderer);
         mPhysEngine = mPhysics->getEngine();
 
@@ -341,7 +335,6 @@ namespace MWWorld
         delete mGlobalVariables;
         delete mRendering;
         delete mPhysics;
-        delete mNetwork;
 
         delete mPlayer;
     }

@@ -11,6 +11,7 @@ namespace MWBase
     class MechanicsManager;
     class InputManager;
     class WindowManager;
+    class Network;
 
     /// \brief Central hub for mw-subsystems
     ///
@@ -30,6 +31,7 @@ namespace MWBase
             DialogueManager *mDialogueManager;
             Journal *mJournal;
             InputManager *mInputManager;
+            Network *mNetwork;
             float mFrameDuration;
 
             Environment (const Environment&);
@@ -60,6 +62,8 @@ namespace MWBase
 
             void setInputManager (InputManager *inputManager);
 
+            void setNetwork(Network *network);
+
             void setFrameDuration (float duration);
             ///< Set length of current frame in seconds.
 
@@ -78,6 +82,8 @@ namespace MWBase
             Journal *getJournal() const;
 
             InputManager *getInputManager() const;
+
+            Network *getNetwork() const;
 
             float getFrameDuration() const;
 

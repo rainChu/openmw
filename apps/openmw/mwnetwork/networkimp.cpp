@@ -1,5 +1,6 @@
-#include "network.hpp"
+#include "networkimp.hpp"
 
+#include <boost/array.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 
 #include <components/misc/stringops.hpp>
@@ -16,7 +17,7 @@
 #include "../mwmechanics/creaturestats.hpp"
 #include "../mwmechanics/npcstats.hpp"
 
-namespace MWWorld
+namespace MWNetwork
 {
     class Network::Service
     {
@@ -63,10 +64,10 @@ namespace MWWorld
         void interpretCharacterMovementPacket(const Packet &packet);
 
         virtual void sendPlayerMovementPacket() = 0;
-        void repositionPuppet(Ptr &puppet, const CharacterMovementPayload &payload) const;
+        void repositionPuppet(MWWorld::Ptr &puppet, const CharacterMovementPayload &payload) const;
         void makePlayerMovementPacket(Packet &out, const std::string &password) const;
 
-        void fillPuppetInfo(Ptr ptr, const std::string &secretPhrase, PuppetInfo &out) const;
+        void fillPuppetInfo(MWWorld::Ptr ptr, const std::string &secretPhrase, PuppetInfo &out) const;
     };
 
     class Network::Server :
@@ -84,7 +85,7 @@ namespace MWWorld
         void sendPacketToAll(Packet &packet);
         void sendPacketToOne(Packet &packet, const boost::asio::ip::udp::endpoint &endpoint);
         void sendPlayerMovementPacket();
-        void acknowledgeClient(Ptr puppet);
+        void acknowledgeClient(MWWorld::Ptr puppet);
     };
 
     class Network::Client :
@@ -204,7 +205,7 @@ namespace MWWorld
         mService = NULL;
     }
 
-    void Network::createPuppet(const std::string &secretPhrase, const Ptr &npc)
+    void Network::createPuppet(const std::string &secretPhrase, const MWWorld::Ptr &npc)
     {
         std::map<std::string, ClientInfo>::const_iterator iter = mClients.find(secretPhrase);
         if (iter != mClients.end())
@@ -246,7 +247,7 @@ namespace MWWorld
         if (iter !=  mNetwork->mClients.end())
         {
             bool hasPtr;
-            Ptr puppet;
+            MWWorld::Ptr puppet;
             try
             {
                 puppet = MWBase::Environment::get().getWorld()->getPtr(iter->second.refId, false);
@@ -271,7 +272,7 @@ namespace MWWorld
         }
     }
 
-    void Network::Service::repositionPuppet(Ptr &puppet, const CharacterMovementPayload &payload) const
+    void Network::Service::repositionPuppet(MWWorld::Ptr &puppet, const CharacterMovementPayload &payload) const
     {
         /// \todo deal with changing exterior/interior
 
@@ -291,7 +292,7 @@ namespace MWWorld
         assert(password.length() < 32);
         strcpy(out.payload.characterMovement.password, password.c_str());
 
-        Ptr player = MWBase::Environment::get().getWorld()->getPlayer().getPlayer();
+        MWWorld::Ptr player = MWBase::Environment::get().getWorld()->getPlayer().getPlayer();
 
         const ESM::Position &refpos = player.getRefData().getPosition();
         for (size_t i = 0; i < 3; ++i)
@@ -303,7 +304,7 @@ namespace MWWorld
         }
     }
 
-    void Network::Service::fillPuppetInfo(Ptr ptr, const std::string &secretPhrase, PuppetInfo &out) const
+    void Network::Service::fillPuppetInfo(MWWorld::Ptr ptr, const std::string &secretPhrase, PuppetInfo &out) const
     {
         MWBase::World *world = MWBase::Environment::get().getWorld();
 
@@ -433,7 +434,7 @@ namespace MWWorld
         {
             iter->second.endpoint = mEndpoint;
             
-            Ptr puppet = MWBase::Environment::get().getWorld()->getPtr(iter->second.refId, false);
+            MWWorld::Ptr puppet = MWBase::Environment::get().getWorld()->getPtr(iter->second.refId, false);
             acknowledgeClient(puppet);
         }
     }
@@ -474,13 +475,13 @@ namespace MWWorld
         sendPacketToAll(packet);
     }
 
-    void Network::Server::acknowledgeClient(Ptr puppet)
+    void Network::Server::acknowledgeClient(MWWorld::Ptr puppet)
     {
         Packet packet;
         packet.type = Packet::AcceptClient;
 
         MWBase::World *world = MWBase::Environment::get().getWorld();
-        Ptr player = world->getPlayer().getPlayer();
+        MWWorld::Ptr player = world->getPlayer().getPlayer();
 
         fillPuppetInfo(puppet, "",     packet.payload.acceptClient.clientPuppet);
         fillPuppetInfo(player, "host", packet.payload.acceptClient.hostPuppet);
@@ -637,7 +638,7 @@ namespace MWWorld
         record = world->createRecord(newRecord);
 
         MWWorld::ManualRef ref(world->getStore(), record->mId);
-        Ptr puppet = ref.getPtr();
+        MWWorld::Ptr puppet = ref.getPtr();
 
         puppet.getCellRef().mPos = puppetInfo.position;
         puppet.getRefData().setCount(1);

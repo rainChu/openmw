@@ -13,6 +13,10 @@ set(GAME_HEADER
 )
 source_group(game FILES ${GAME} ${GAME_HEADER})
 
+add_openmw_dir (mwnetwork
+	networkimp
+    )
+
 add_openmw_dir (mwrender
     renderingmanager debugging sky camera animation npcanimation creatureanimation activatoranimation
     actors objects renderinginterface localmap occlusionquery water shadows
@@ -56,7 +60,7 @@ add_openmw_dir (mwworld
     refdata worldimp physicssystem scene globals class action nullaction actionteleport
     containerstore actiontalk actiontake manualref player cellfunctors failedaction
     cells localscripts customdata weather inventorystore ptr actionopen actionread
-    actionequip timestamp actionalchemy cellstore actionapply actioneat network
+    actionequip timestamp actionalchemy cellstore actionapply actioneat
     esmstore store recordcmp fallback actionrepair actionsoulgem livecellref actiondoor
     )
 
@@ -73,7 +77,7 @@ add_openmw_dir (mwmechanics
 
 add_openmw_dir (mwbase
     environment world scriptmanager dialoguemanager journal soundmanager mechanicsmanager
-    inputmanager windowmanager
+    inputmanager windowmanager network
     )
 
 # Main executable

@@ -2,9 +2,11 @@
 
 #include "../mwbase/environment.hpp"
 #include "../mwworld/worldimp.hpp"
-#include "../mwworld/network.hpp"
 #include "../mwworld/class.hpp"
+
 #include "../mwmechanics/movement.hpp"
+
+#include "../mwnetwork/networkimp.hpp"
 
 namespace MWMechanics
 {
@@ -20,8 +22,8 @@ namespace MWMechanics
 
     bool AiPuppet::execute (const MWWorld::Ptr& actor)
     {
-        MWWorld::Network &network = MWBase::Environment::get().getWorld()->getNetwork();
-        network.getCharacterMovement(mName, actor.getClass().getMovementSettings(actor));
+        MWBase::Network *network = MWBase::Environment::get().getNetwork();
+        network->getCharacterMovement(mName, actor.getClass().getMovementSettings(actor));
 
         return false;
     }
