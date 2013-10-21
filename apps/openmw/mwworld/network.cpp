@@ -9,10 +9,12 @@
 #include "../mwworld/worldimp.hpp"
 #include "../mwworld/player.hpp"
 #include "../mwworld/class.hpp"
+#include "../mwworld/manualref.hpp"
+
 #include "../mwmechanics/movement.hpp"
 #include "../mwmechanics/aipuppet.hpp"
 #include "../mwmechanics/creaturestats.hpp"
-#include "../mwworld/manualref.hpp"
+#include "../mwmechanics/npcstats.hpp"
 
 namespace MWWorld
 {
@@ -63,6 +65,8 @@ namespace MWWorld
         virtual void sendPlayerMovementPacket() = 0;
         void repositionPuppet(Ptr &puppet, const CharacterMovementPayload &payload) const;
         void makePlayerMovementPacket(Packet &out, const std::string &password) const;
+
+        void fillPuppetInfo(Ptr ptr, const std::string &secretPhrase, PuppetInfo &out) const;
     };
 
     class Network::Server :
@@ -110,7 +114,7 @@ namespace MWWorld
 
         void sendPacket(Packet &packet);
         void sendPlayerMovementPacket();
-        void createPuppetNpc(const NewPuppetPayload &puppetInfo);
+        void createPuppetNpc(const PuppetInfo &puppetInfo);
     };
 
 
@@ -299,6 +303,72 @@ namespace MWWorld
         }
     }
 
+    void Network::Service::fillPuppetInfo(Ptr ptr, const std::string &secretPhrase, PuppetInfo &out) const
+    {
+        MWBase::World *world = MWBase::Environment::get().getWorld();
+
+        // Password
+        if (secretPhrase.length() >= 32)
+            throw std::runtime_error("Secret Phrase must be < 32 characters in length");
+        strcpy(out.password, secretPhrase.c_str());
+
+        // Cell
+        const ESM::Cell *cell = ptr.getCell()->mCell;
+
+        if ( cell->isExterior() )
+            out.isExterior = true;
+        else
+        {
+            out.isExterior = false;
+
+            if (world->getCurrentCellName().length() >= 64)
+                throw std::runtime_error("Cell name must be 63 characters or less");
+
+            strcpy( out.cellName, world->getCurrentCellName().c_str() );
+        }
+
+        // Position
+        out.position = ptr.getRefData().getPosition();
+
+        // Movement
+        MWMechanics::Movement &movement =  MWWorld::Class::get(ptr).getMovementSettings(ptr);
+        for( size_t i = 0; i < 3; ++i )
+        {
+            out.movement.pos[i] = movement.mPosition[i];
+            out.movement.rot[i] = movement.mRotation[i];
+        }
+
+        // NPC Info
+        std::string id = MWWorld::Class::get(ptr).getId(ptr);
+        const ESM::NPC *npc = world->getStore().get<ESM::NPC>().search( id );
+        assert( npc ); // the puppet uses this NPC, if it doesnt' exist then something's gone haywire.
+
+        // Hair
+        if ( npc->mHair.length() >= 48 )
+            throw std::runtime_error("Hair model is incompatible, model name must be < 48 characters in length");
+        strcpy(out.hair, npc->mHair.c_str());
+
+        // Head
+        if (npc->mHead.length() >= 48 )
+            throw std::runtime_error("Hair model is incompatible, model name must be < 48 characters in length");
+        strcpy(out.head, npc->mHead.c_str());
+
+        // Model
+        if (npc->mModel.length() >= 48 )
+            throw std::runtime_error("Model is incompatible, model name must be < 48 characters in length");
+        strcpy(out.model, npc->mModel.c_str());
+
+        // Class
+        if (npc->mClass.length() >= 32 )
+            throw std::runtime_error("Class is incompatible, model name must be < 32 characters in length");
+        strcpy(out.npcClass, npc->mClass.c_str());
+
+        // Race
+        if (npc->mRace.length() >= 32 )
+            throw std::runtime_error("Race is incompatible, model name must be < 32 characters in length");
+        strcpy(out.race, npc->mRace.c_str());
+    }
+
     void Network::Service::update()
     {
         mIoService->poll();
@@ -410,35 +480,10 @@ namespace MWWorld
         packet.type = Packet::AcceptClient;
 
         MWBase::World *world = MWBase::Environment::get().getWorld();
-
-        // Set the cell to travel to
-        const ESM::Cell *cell = puppet.getCell()->mCell;
-        if ( cell->isExterior() )
-            packet.payload.acceptClient.isExterior = true;
-        else
-        {
-            packet.payload.acceptClient.isExterior = false;
-
-            assert(world->getCurrentCellName().length() < 64);
-            strcpy(packet.payload.acceptClient.cellName, world->getCurrentCellName().c_str());
-        }
-
-        ESM::Position *clientPosition = &puppet.getRefData().getPosition();
-
         Ptr player = world->getPlayer().getPlayer();
-        ESM::Position *hostPosition = &player.getRefData().getPosition();
-        MWMechanics::Movement *hostMovement = &player.getClass().getMovementSettings(player);
 
-        packet.payload.acceptClient.position            = *clientPosition;
-        packet.payload.acceptClient.hostPuppet.position = *hostPosition;
-
-        for (size_t i = 0; i < 3; ++i)
-        {
-            packet.payload.acceptClient.hostPuppet.movement.pos[i] = hostMovement->mPosition[i];
-            packet.payload.acceptClient.hostPuppet.movement.rot[i] = hostMovement->mRotation[i];
-        }
-
-        strcpy(packet.payload.acceptClient.hostPuppet.password, "host");
+        fillPuppetInfo(puppet, "",     packet.payload.acceptClient.clientPuppet);
+        fillPuppetInfo(player, "host", packet.payload.acceptClient.hostPuppet);
 
         // Send to only the person who sent to me
         sendPacketToOne(packet, mEndpoint);
@@ -513,21 +558,22 @@ namespace MWWorld
             mAccepted = true;
             timeout->cancel();
 
-            if (packet->payload.acceptClient.isExterior)
+            // Move to the client puppet
+            if (packet->payload.acceptClient.clientPuppet.isExterior)
             {
                 MWBase::World *world = MWBase::Environment::get().getWorld();
-                world->changeToExteriorCell(packet->payload.acceptClient.position);
+                world->changeToExteriorCell(packet->payload.acceptClient.clientPuppet.position);
             }
             else
             {
                 // If the cell name somehow got corrupted undetected, ending the string
                 // ensures that there won't be a buffer overrun.
                 /// \fixme Is this needed or not? Can someone with experience look into it?
-                packet->payload.acceptClient.cellName[63] = '\0';
+                packet->payload.acceptClient.clientPuppet.cellName[63] = '\0';
 
                 MWBase::World *world = MWBase::Environment::get().getWorld();
-                world->changeToInteriorCell(packet->payload.acceptClient.cellName,
-                                            packet->payload.acceptClient.position);
+                world->changeToInteriorCell(packet->payload.acceptClient.clientPuppet.cellName,
+                                            packet->payload.acceptClient.clientPuppet.position);
             }
 
             createPuppetNpc(packet->payload.acceptClient.hostPuppet);
@@ -555,21 +601,56 @@ namespace MWWorld
         sendPacket(packet);
     }
 
-    void Network::Client::createPuppetNpc(const NewPuppetPayload &puppetInfo)
+    void Network::Client::createPuppetNpc(const PuppetInfo &puppetInfo)
     {
-        MWWorld::CellStore* store = MWBase::Environment::get().getWorld()->getPlayer().getPlayer().getCell();                    
+        MWBase::World *world = MWBase::Environment::get().getWorld();
 
-        // TODO transfer the NPC head/body/hair itself
-        MWWorld::ManualRef ref(MWBase::Environment::get().getWorld()->getStore(), "Fargoth");
+        ESM::NPC newRecord;
+        const ESM::NPC *record;
 
+        newRecord.blank();
+        newRecord.mHead  = puppetInfo.head;
+        newRecord.mHair  = puppetInfo.hair;
+        newRecord.mModel = puppetInfo.model;
+        newRecord.mRace  = puppetInfo.race;
+        newRecord.mClass = puppetInfo.npcClass;
+
+        newRecord.mNpdtType = 52;
+        // TODO do stats properly
+        newRecord.mNpdt52.mHealth = 50;
+        newRecord.mNpdt52.mLevel  = 1;
+
+        newRecord.mName = "Derp";
+
+        record = world->createRecord(newRecord);
+
+        MWWorld::ManualRef ref(world->getStore(), record->mId);
         Ptr puppet = ref.getPtr();
+
         puppet.getCellRef().mPos = puppetInfo.position;
         puppet.getRefData().setCount(1);
 
         MWMechanics::AiPuppet aiPackage(puppetInfo.password);
         puppet.getClass().getCreatureStats(puppet).getAiSequence().stack(aiPackage);
 
-        MWBase::Environment::get().getWorld()->safePlaceObject(puppet, *store, puppetInfo.position );
+        MWWorld::CellStore* store;
+
+        if (puppetInfo.isExterior)
+        {
+            int cx, cy;
+            world->positionToIndex(puppetInfo.position.pos[0], puppetInfo.position.pos[1], cx, cy);
+            store = world->getExterior(cx, cy);
+        }
+        else
+            store = world->getInterior(puppetInfo.cellName);
+
+        world->safePlaceObject(puppet, *store, puppetInfo.position );
+
+        for (size_t i = 0; i < 3; ++i)
+        {
+            puppet.mRef->mRef.mPos.pos[i] = puppetInfo.position.pos[i];
+            puppet.mRef->mRef.mPos.rot[i] = puppetInfo.position.rot[i];
+        }
 
         mNetwork->createPuppet(puppetInfo.password, puppet);
     }
