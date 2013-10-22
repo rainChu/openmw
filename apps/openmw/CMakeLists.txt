@@ -14,7 +14,7 @@ set(GAME_HEADER
 source_group(game FILES ${GAME} ${GAME_HEADER})
 
 add_openmw_dir (mwnetwork
-	networkimp
+	networkimp service client server packet
     )
 
 add_openmw_dir (mwrender
