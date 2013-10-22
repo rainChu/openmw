@@ -36,7 +36,7 @@ namespace MWNetwork
 
         void getCharacterMovement(const std::string &puppetName, MWMechanics::Movement &out) const;
         void connect(const std::string &address, const std::string &slotPassword);
-        void openServer(int port, const std::string &protocol);
+        void openServer(int port);
         void close();
         void createPuppet(const std::string &secretPhrase, const MWWorld::Ptr &npc);
 

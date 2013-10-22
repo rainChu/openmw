@@ -74,7 +74,7 @@ namespace MWNetwork
         mIsServer = false;
     }
 
-    void Network::openServer(int port, const std::string &protocol)
+    void Network::openServer(int port)
     {
         if (mService)
         {
@@ -84,16 +84,7 @@ namespace MWNetwork
                 throw std::exception("Already connected as a client. Use NetworkClose if you're sure you want to leave.");
         }
 
-        std::string normalizedProtocol(protocol);
-        Misc::StringUtils::toLower(normalizedProtocol);
-
-        if (protocol == "udp")
-            mService = new Server(*this, port);
-        else if (protocol == "tcp")
-            throw std::exception("TCP Servers aer not implemented yet, sorry!");
-        else
-            throw std::exception("Protocol must be either \"TCP\" or \"UDP\".");
-
+        mService = new Server(*this, port);
         mIsServer = true;
     }
 

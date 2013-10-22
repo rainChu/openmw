@@ -52,11 +52,8 @@ namespace MWScript
                 int port = runtime[0].mInteger;
                 runtime.pop();
 
-                std::string protocol = runtime.getStringLiteral(runtime[0].mInteger);
-                runtime.pop();
-
                 runtime.getContext().report( "Opening a server on port " + lexical_cast<std::string>(port) + "." );
-                MWBase::Environment::get().getNetwork()->openServer(port, protocol);
+                MWBase::Environment::get().getNetwork()->openServer(port);
                 runtime.getContext().report("Server open.");
             }
         };

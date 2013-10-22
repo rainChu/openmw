@@ -37,7 +37,7 @@ namespace MWBase
         /// \param port The port to listen on. This should typically be user-provided.
         /// \param The protocol, either TCP or UDP.
         /// \exception std::exception If unable to open, an exception will be thrown with a user-friendly reason.
-        virtual void openServer(int port, const std::string &protocol) = 0;
+        virtual void openServer(int port) = 0;
 
         virtual void close() = 0;
 

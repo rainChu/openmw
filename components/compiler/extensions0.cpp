@@ -271,7 +271,7 @@ namespace Compiler
         void registerExtensions (Extensions& extensions)
         {
             extensions.registerInstruction ("networkjoin", "SS", opcodeNetworkJoin);
-            extensions.registerInstruction ("networkcreate", "lS", opcodeNetworkCreate);
+            extensions.registerInstruction ("networkcreate", "l", opcodeNetworkCreate);
             extensions.registerInstruction ("networkclose", "", opcodeNetworkClose);
 
             extensions.registerInstruction ("networkkick", "S", opcodeNetworkKick);
