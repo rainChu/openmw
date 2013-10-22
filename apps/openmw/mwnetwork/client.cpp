@@ -22,8 +22,24 @@ namespace MWNetwork
 
         mSocket = new udp::socket(*mIoService);
 
+        // port number
+        std::string port;
+        std::string addressOnly;
+        size_t found = address.find(':');
+
+        if (found != std::string::npos)
+        {
+            port = address.substr(found+1);
+            addressOnly = address.substr(0, found);
+        }
+        else
+        {
+            port = "5121";
+            addressOnly = address;
+        }
+
         udp::resolver resolver(*mIoService);
-        udp::resolver::query query(boost::asio::ip::udp::v4(), address, "5121");
+        udp::resolver::query query(boost::asio::ip::udp::v4(), addressOnly, port);
         mEndpoint = *resolver.resolve(query);
 
         mSocket->open(udp::v4());
